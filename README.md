@@ -40,7 +40,7 @@ Bookmarklets don't update themselves. The panel shows its version next to "PSA",
 
 ## How it works
 
-`src/psa.js` is the readable source and `src/install.html` is the install page template; `node build.mjs` (Node 18+, no dependencies) rebuilds `dist/` and the site's `index.html`. The build strips comments and indentation, checks the result parses, and URL-encodes it.
+`src/psa.js` is the readable source and `src/install.html` is the install page template; `node build.mjs` rebuilds `dist/` and the site's `index.html`. The build minifies the code with [terser](https://terser.org/), checks the result parses, and percent-encodes only the characters a `javascript:` URL can't carry, which keeps the bookmarklet around 26 KB.
 
 - **Finding media.** Every 500 ms the panel queries each known document and shadow root for `audio, video`; every 2 s it re-walks the page to find new open shadow roots and same-origin iframes. While the panel is open, `HTMLMediaElement.prototype.play` is wrapped so players that are never inserted into the page are found too; closing the panel restores it.
 - **Holding the speed.** Live streams (`duration` is `Infinity`) are left alone, and put back to 1× if they were sped up before their duration was known. For everything else it sets both `playbackRate` and `defaultPlaybackRate`, the latter because `load()` resets to it. It re-applies on `ratechange`, `play`, `loadstart` and `loadedmetadata`, and on every tick. If a site resets an element more than 8 times in 2 s, the panel replaces that element's `playbackRate` setter so the page's writes are ignored ("speed locked" in the panel). Closing the panel removes the lock.
@@ -65,9 +65,12 @@ Bookmarklets don't update themselves. The panel shows its version next to "PSA",
 Bump `VERSION` at the top of `src/psa.js` for each release; the build copies it to the install page.
 
 ```
+npm ci
 node build.mjs
 node test/serve.mjs
 ```
+
+`npm ci` installs terser, the only build tool (Node 18+). A GitHub Action rebuilds on every push and fails if the committed `dist/` or `index.html` doesn't match `src/`.
 
 Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and live streams; it also checks the skip buttons, minimizing, the outline and the keyboard shortcuts. `.claude/launch.json` starts the same server for Claude Code's preview browser.
 

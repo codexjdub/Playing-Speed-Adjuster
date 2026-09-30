@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - name: Install build tools
+        run: npm ci
       - name: Rebuild from src/
         run: node build.mjs
       - name: Check the committed build is up to date

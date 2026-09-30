@@ -1,0 +1,13 @@
+{
+  "name": "playing-speed-adjuster",
+  "private": true,
+  "description": "Playing Speed Adjuster (PSA): a site-independent bookmarklet to control HTML5 audio/video playback speed",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node test/serve.mjs"
+  },
+  "devDependencies": {
+    "terser": "^5.51.2"
+  }
+}

@@ -19,7 +19,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.2.0';
+  const VERSION = '1.2.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
