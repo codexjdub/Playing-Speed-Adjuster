@@ -11,17 +11,17 @@ PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` a
 
 ## Install
 
-**[Open the install page](https://codexjdub.github.io/Playing-Speed-Adjuster/dist/install.html)** and drag the **PSA** button onto your bookmarks bar.
+**[Open the install page](https://codexjdub.github.io/Playing-Speed-Adjuster/)** and drag the **PSA** button onto your bookmarks bar. The page also has demo tracks to try it on.
 
 Or copy and paste: open [`dist/bookmarklet.txt`](dist/bookmarklet.txt) on GitHub and click **Copy raw file**. Create a bookmark named `PSA` and paste the copied line as its URL. In Safari, bookmark any page, then use **Edit Address…** on it.
 
-You can try it on the [test page](https://codexjdub.github.io/Playing-Speed-Adjuster/test/test-page.html).
+The [test page](https://codexjdub.github.io/Playing-Speed-Adjuster/test/test-page.html) has many kinds of players and a button that runs automated checks.
 
 Click the bookmark on a page with audio or video to open the panel. Click it again, or click ×, to close it.
 
 ## How it works
 
-`src/psa.js` is the readable source; `node build.mjs` (Node 18+, no dependencies) rebuilds `dist/`. The build strips comments and indentation, checks the result parses, and URL-encodes it.
+`src/psa.js` is the readable source and `src/install.html` is the install page template; `node build.mjs` (Node 18+, no dependencies) rebuilds `dist/` and the site's `index.html`. The build strips comments and indentation, checks the result parses, and URL-encodes it.
 
 - **Finding media.** Every 500 ms the panel queries each known document and shadow root for `audio, video`; every 2 s it re-walks the page to find new open shadow roots and same-origin iframes. While the panel is open, `HTMLMediaElement.prototype.play` is wrapped so players that are never inserted into the page are found too; closing the panel restores it.
 - **Holding the speed.** It sets both `playbackRate` and `defaultPlaybackRate`, the latter because `load()` resets to it. It re-applies on `ratechange`, `play`, `loadstart` and `loadedmetadata`, and on every tick. If a site resets an element more than 8 times in 2 s, the panel replaces that element's `playbackRate` setter so the page's writes are ignored ("speed locked" in the panel). Closing the panel removes the lock.

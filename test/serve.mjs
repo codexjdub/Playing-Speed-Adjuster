@@ -16,7 +16,7 @@ createServer(async (req, res) => {
     return;
   }
   try {
-    const body = await readFile(join(root, path || 'dist/install.html'));
+    const body = await readFile(join(root, path || 'index.html'));
     // CORS lets a page on another site fetch dist/psa.min.js while testing.
     res.writeHead(200, {
       'content-type': types[extname(path)] || 'application/octet-stream',
