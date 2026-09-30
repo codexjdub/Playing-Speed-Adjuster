@@ -49,3 +49,7 @@ node test/serve.mjs
 ```
 
 Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, and a fullscreen container. `.claude/launch.json` starts the same server for Claude Code's preview browser.
+
+## License
+
+[MIT](LICENSE)
