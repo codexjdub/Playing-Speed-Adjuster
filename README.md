@@ -2,11 +2,14 @@
 
 PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` and `<video>` on the current page. It works on any site; nothing in it is specific to one site.
 
+<img src="docs/panel.png" alt="The PSA panel: title and status, −10s / Play / +20s buttons, the speed readout at 1.50× with − and + buttons, and speed presets" width="320">
+
 - Speed from 0.25× to 4×: −/+ in 0.05 steps, presets (1, 1.25, 1.5, 1.75, 2, 2.5, 3), or click the readout and type a value (`1.6`, `1.6x`, `160%`).
 - Applies the speed to **every** audio and video element on the page, including ones added later, ones inside open shadow roots and same-origin iframes, and off-page `new Audio()` players.
 - Remembers the speed (and panel position) per site in `localStorage`.
 - Keeps re-applying the speed so sites that reset `playbackRate` don't win.
-- Play/Pause and a best-effort title for the active item (the one that most recently started playing). Use ‹ › to pick another item.
+- Play/Pause, −10 s / +20 s skips and a best-effort title for the active item (the one that most recently started playing). Use ‹ › to pick another item.
+- Live streams (live radio, anything without an end) stay at normal speed, since speeding them up only causes buffering.
 - Drag the panel by its top bar. It stays open until you click × or run the bookmarklet again.
 
 ## Install
@@ -19,12 +22,16 @@ The [test page](https://codexjdub.github.io/Playing-Speed-Adjuster/test/test-pag
 
 Click the bookmark on a page with audio or video to open the panel. Click it again, or click ×, to close it.
 
+## Updating
+
+Bookmarklets don't update themselves. The panel shows its version next to "PSA", and the install page shows the latest one. If yours is older, drag the button from the install page to your bookmarks bar again and delete the old bookmark. See [Releases](https://github.com/codexjdub/Playing-Speed-Adjuster/releases) for what changed.
+
 ## How it works
 
 `src/psa.js` is the readable source and `src/install.html` is the install page template; `node build.mjs` (Node 18+, no dependencies) rebuilds `dist/` and the site's `index.html`. The build strips comments and indentation, checks the result parses, and URL-encodes it.
 
 - **Finding media.** Every 500 ms the panel queries each known document and shadow root for `audio, video`; every 2 s it re-walks the page to find new open shadow roots and same-origin iframes. While the panel is open, `HTMLMediaElement.prototype.play` is wrapped so players that are never inserted into the page are found too; closing the panel restores it.
-- **Holding the speed.** It sets both `playbackRate` and `defaultPlaybackRate`, the latter because `load()` resets to it. It re-applies on `ratechange`, `play`, `loadstart` and `loadedmetadata`, and on every tick. If a site resets an element more than 8 times in 2 s, the panel replaces that element's `playbackRate` setter so the page's writes are ignored ("speed locked" in the panel). Closing the panel removes the lock.
+- **Holding the speed.** Live streams (`duration` is `Infinity`) are left alone, and put back to 1× if they were sped up before their duration was known. For everything else it sets both `playbackRate` and `defaultPlaybackRate`, the latter because `load()` resets to it. It re-applies on `ratechange`, `play`, `loadstart` and `loadedmetadata`, and on every tick. If a site resets an element more than 8 times in 2 s, the panel replaces that element's `playbackRate` setter so the page's writes are ignored ("speed locked" in the panel). Closing the panel removes the lock.
 - **Titles**, first match wins:
   1. The element's own `aria-label`, `aria-labelledby` or `title`.
   2. Text next to the player: walk outwards one container at a time and take the first visible heading, else visible text. Skip player controls, timecodes, text drawn over the video, and screen-reader-only text. Stop before a container that holds another player, because shared text can't tell them apart.
@@ -43,12 +50,14 @@ Click the bookmark on a page with audio or video to open the panel. Click it aga
 
 ## Development
 
+Bump `VERSION` at the top of `src/psa.js` for each release; the build copies it to the install page.
+
 ```
 node build.mjs
 node test/serve.mjs
 ```
 
-Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, and a fullscreen container. `.claude/launch.json` starts the same server for Claude Code's preview browser.
+Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and a live stream; it also checks the skip buttons. `.claude/launch.json` starts the same server for Claude Code's preview browser.
 
 ## License
 

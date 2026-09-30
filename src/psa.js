@@ -18,10 +18,14 @@
 
   // ---- Settings ---------------------------------------------------------------------------------
 
+  // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
+  const VERSION = '1.1.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
   const PRESETS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  const SKIP_BACK = 10;
+  const SKIP_AHEAD = 20;
   const TICK_MS = 500;
   // Shadow roots and same-origin iframes are rediscovered every Nth tick, because that walk visits every element.
   const DEEP_SCAN_EVERY = 4;
@@ -30,7 +34,17 @@
   const FIGHT_WINDOW_MS = 2000;
   const TITLE_TTL_MS = 2000;
   const STORE_KEY = 'speedCtl.v1';
-  const MEDIA_EVENTS = ['play', 'playing', 'pause', 'ended', 'ratechange', 'loadstart', 'loadedmetadata', 'emptied'];
+  const MEDIA_EVENTS = [
+    'play',
+    'playing',
+    'pause',
+    'ended',
+    'ratechange',
+    'loadstart',
+    'loadedmetadata',
+    'durationchange',
+    'emptied',
+  ];
 
   // ---- Per-site storage -------------------------------------------------------------------------
   // localStorage is already scoped to the site's origin. Blocked storage falls back to memory.
@@ -63,6 +77,8 @@
   const roots = new Map(); // Document | ShadowRoot -> undo
   const watched = new Map(); // off-page element -> undo (it has its own listeners)
   const locked = new Map(); // element whose playbackRate setter we replaced -> undo
+  const touched = new WeakSet(); // elements whose speed we changed
+  const growth = new WeakMap(); // element -> { duration, increases }, for spotting live streams
   const fights = new WeakMap();
   const titles = new WeakMap();
 
@@ -97,14 +113,56 @@
 
   // ---- Speed enforcement ------------------------------------------------------------------------
 
+  // A live stream (live radio, a MediaStream) has no end. It can't run ahead of the broadcast,
+  // so speeding it up only causes buffering. Most report an Infinity duration; players that stream
+  // in chunks (hls.js and similar, e.g. RTHK live radio) instead report a duration that keeps growing.
+  const isLive = (el) => el.duration === Infinity || (growth.get(el) || { increases: 0 }).increases >= 2;
+
+  function noteDuration(el) {
+    const duration = el.duration;
+    if (!isFinite(duration)) return;
+    const seen = growth.get(el);
+    if (!seen) {
+      growth.set(el, { duration, increases: 0 });
+      return;
+    }
+    if (duration > seen.duration + 0.5) seen.increases += 1;
+    seen.duration = duration;
+  }
+
   function applyRate(el) {
+    if (isLive(el)) {
+      restoreLive(el);
+      return;
+    }
     try {
       // defaultPlaybackRate is what load() resets playbackRate to, so new sources start at our speed too.
-      if (!sameRate(el.defaultPlaybackRate, rate)) el.defaultPlaybackRate = rate;
-      if (!sameRate(el.playbackRate, rate)) el.playbackRate = rate;
+      if (!sameRate(el.defaultPlaybackRate, rate)) {
+        el.defaultPlaybackRate = rate;
+        touched.add(el);
+      }
+      if (!sameRate(el.playbackRate, rate)) {
+        el.playbackRate = rate;
+        touched.add(el);
+      }
     } catch (err) {
       // Some browsers throw for rates they can't play; the clamp keeps us inside the usual range.
     }
+  }
+
+  // A stream's duration is only known after it starts loading, so it may already have our speed.
+  function restoreLive(el) {
+    const unlock = locked.get(el);
+    if (unlock) {
+      safely(unlock);
+      locked.delete(el);
+    }
+    if (!touched.has(el)) return;
+    touched.delete(el);
+    safely(() => {
+      el.defaultPlaybackRate = 1;
+      el.playbackRate = 1;
+    });
   }
 
   function nativeRateDescriptor(el) {
@@ -141,6 +199,7 @@
   }
 
   function enforce(el) {
+    if (isLive(el)) return;
     if (sameRate(el.playbackRate, rate) && sameRate(el.defaultPlaybackRate, rate)) return;
     const now = Date.now();
     let fight = fights.get(el);
@@ -177,7 +236,14 @@
     } else if (event.type === 'play') {
       markStarted(el);
       applyRate(el);
-    } else if (event.type === 'playing' || event.type === 'loadstart' || event.type === 'loadedmetadata') {
+    } else if (event.type === 'loadstart' || event.type === 'emptied') {
+      // A new source: its duration history no longer applies.
+      growth.delete(el);
+      applyRate(el);
+    } else if (event.type === 'durationchange') {
+      noteDuration(el);
+      applyRate(el);
+    } else if (event.type === 'playing' || event.type === 'loadedmetadata') {
       applyRate(el);
     }
     scheduleRefresh();
@@ -554,6 +620,7 @@
 .bar:active { cursor: grabbing; }
 .grip { width: 12px; height: 12px; fill: currentColor; opacity: 0.4; flex: none; }
 .brand { flex: 1; font-size: 12px; font-weight: 600; opacity: 0.7; letter-spacing: 0.02em; }
+.version { margin-left: 6px; font-size: 11px; font-weight: 400; }
 .nav { display: flex; align-items: center; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .nav[hidden] { display: none; }
 .count { min-width: 30px; text-align: center; opacity: 0.8; }
@@ -566,7 +633,9 @@ button:active { background: rgba(255, 255, 255, 0.25); }
 button:disabled { opacity: 0.4; cursor: default; background: rgba(255, 255, 255, 0.09); }
 button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-offset: 1px; }
 .icon { width: 24px; height: 24px; padding: 0; font-size: 17px; line-height: 24px; background: transparent; }
-.now { display: flex; align-items: center; gap: 10px; margin: 2px 0 10px; }
+.meta { margin: 2px 0 10px; min-width: 0; }
+.transport { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px; }
+.skip { flex: none; width: 58px; height: 34px; padding: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .play {
   flex: none; width: 40px; height: 40px; padding: 0; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; background: #f5f5f7; color: #1c1c1e;
@@ -574,7 +643,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .play:hover { background: #ffffff; }
 .play:disabled { background: #f5f5f7; }
 .play svg { width: 16px; height: 16px; fill: currentColor; }
-.meta { flex: 1; min-width: 0; }
 .title {
   font-weight: 600; overflow: hidden; word-break: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -685,22 +753,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     ui.count,
     button('icon', '›', 'Next media on this page', () => cycle(1))
   );
+  const brand = make('span', 'brand', 'PSA');
+  brand.append(make('span', 'version', VERSION));
   ui.bar.append(
     makeIcon(GRIP_PATH, 'grip').svg,
-    make('span', 'brand', 'PSA'),
+    brand,
     ui.nav,
     button('icon', '×', 'Close (click the bookmarklet again to reopen)', () => destroy())
   );
 
-  const playIcon = makeIcon(PLAY_PATH);
-  ui.play = button('play', null, 'Play', () => togglePlay());
-  ui.play.append(playIcon.svg);
   ui.title = make('div', 'title');
   ui.sub = make('div', 'sub');
   const meta = make('div', 'meta');
   meta.append(ui.title, ui.sub);
-  const now = make('div', 'now');
-  now.append(ui.play, meta);
+
+  const playIcon = makeIcon(PLAY_PATH);
+  ui.play = button('play', null, 'Play', () => togglePlay());
+  ui.play.append(playIcon.svg);
+  ui.back = button('skip', '−' + SKIP_BACK + 's', 'Back ' + SKIP_BACK + ' seconds', () => skip(-SKIP_BACK));
+  ui.ahead = button('skip', '+' + SKIP_AHEAD + 's', 'Forward ' + SKIP_AHEAD + ' seconds', () => skip(SKIP_AHEAD));
+  const transport = make('div', 'transport');
+  transport.append(ui.back, ui.play, ui.ahead);
 
   ui.readout = button('readout', '', 'Click to type a speed', () => openEntry());
   ui.entry = make('input', 'entry');
@@ -727,7 +800,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.note.hidden = true;
   ui.note.setAttribute('role', 'status');
 
-  ui.panel.append(ui.bar, now, speed, presetRow, ui.note);
+  ui.panel.append(ui.bar, meta, transport, speed, presetRow, ui.note);
   shadow.append(ui.panel);
 
   // Keep the panel's keystrokes and clicks away from page shortcuts (YouTube's "k", digits, etc.).
@@ -799,7 +872,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!loaded) parts.push('Not loaded');
     else if (el.ended) parts.push('Ended');
     else parts.push(el.paused ? 'Paused' : 'Playing');
-    if (loaded) {
+    if (loaded && isLive(el)) {
+      parts.push('Live · normal speed');
+    } else if (loaded) {
       const at = clock(el.currentTime);
       const total = clock(el.duration);
       if (at) parts.push(total ? at + ' / ' + total : at);
@@ -827,6 +902,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     }
     const playing = !!el && !el.paused && !el.ended;
     ui.play.disabled = !el || (el.paused && !hasSource(el));
+    const cannotSkip = !el || !seekRange(el);
+    ui.back.disabled = cannotSkip;
+    ui.ahead.disabled = cannotSkip;
     const label = playing ? 'Pause' : 'Play';
     if (ui.play.getAttribute('aria-label') !== label) {
       ui.play.setAttribute('aria-label', label);
@@ -870,6 +948,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     scheduleRefresh();
   }
 
+  // The part of the media that can be jumped to: all of it for a normal file, or the
+  // buffered window of a live stream that allows rewinding. Null until it has loaded.
+  function seekRange(el) {
+    if (isFinite(el.duration) && el.duration > 0) return { start: 0, end: el.duration };
+    const ranges = el.seekable;
+    if (ranges && ranges.length) return { start: ranges.start(0), end: ranges.end(ranges.length - 1) };
+    return null;
+  }
+
+  function skip(seconds) {
+    const el = target;
+    const range = el && seekRange(el);
+    if (!range) return;
+    try {
+      el.currentTime = Math.min(range.end, Math.max(range.start, el.currentTime + seconds));
+    } catch (err) {
+      showNote('This player doesn’t allow skipping.');
+    }
+    scheduleRefresh();
+  }
+
   function cycle(delta) {
     const list = mediaList;
     if (list.length < 2) return;
@@ -894,7 +993,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function placeAt(x, y) {
     const view = viewport();
     const maxX = Math.max(0, view.width - (host.offsetWidth || 272));
-    const maxY = Math.max(0, view.height - (host.offsetHeight || 170));
+    const maxY = Math.max(0, view.height - (host.offsetHeight || 215));
     const left = Math.round(Math.min(Math.max(0, x), maxX));
     const top = Math.round(Math.min(Math.max(0, y), maxY));
     host.style.setProperty('left', left + 'px', 'important');
@@ -962,7 +1061,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   function refresh() {
     mediaList = collectMedia();
-    mediaList.forEach(applyRate);
+    mediaList.forEach((el) => {
+      noteDuration(el);
+      applyRate(el);
+    });
     render();
   }
 
@@ -1006,9 +1108,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     destroy,
     // Read-only snapshot for test/test-page.html and debugging.
     inspect: () => ({
+      version: VERSION,
       rate,
       target,
-      media: mediaList.map((el) => ({ el, title: titleOf(el), locked: locked.has(el) })),
+      media: mediaList.map((el) => ({ el, title: titleOf(el), locked: locked.has(el), live: isLive(el) })),
     }),
   };
   window[NS] = api;

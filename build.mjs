@@ -14,6 +14,8 @@ const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, 'dist');
 const source = readFileSync(join(root, 'src', 'psa.js'), 'utf8');
 const template = readFileSync(join(root, 'src', 'install.html'), 'utf8');
+const version = (source.match(/const VERSION = '([^']+)'/) || [])[1];
+if (!version) throw new Error("src/psa.js has no `const VERSION = '…'` line");
 
 // Syntax-safe shrinking: drop the header comment, full-line // comments, indentation and blank lines.
 // Newlines are kept, so trailing comments and automatic semicolons still parse the same way.
@@ -33,6 +35,7 @@ const bookmarklet = 'javascript:' + encodeURIComponent(code);
 const install = template
   .replace(/<!-- Template[^\n]*-->\n/, '')
   .replaceAll('%SIZE%', code.length.toLocaleString('en'))
+  .replaceAll('%VERSION%', version)
   .replaceAll('%BOOKMARKLET%', () => bookmarklet);
 
 const redirect = `<!doctype html>
@@ -49,4 +52,4 @@ writeFileSync(join(dist, 'bookmarklet.txt'), bookmarklet + '\n');
 writeFileSync(join(dist, 'install.html'), redirect);
 writeFileSync(join(root, 'index.html'), install);
 
-console.log(`Built bookmarklet: ${code.length} chars of code, ${bookmarklet.length} chars as a URL.`);
+console.log(`Built PSA ${version}: ${code.length} chars of code, ${bookmarklet.length} chars as a URL.`);

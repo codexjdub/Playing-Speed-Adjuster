@@ -16,10 +16,12 @@ createServer(async (req, res) => {
     return;
   }
   try {
-    const body = await readFile(join(root, path || 'index.html'));
+    // The type comes from the file actually served, so "/" is sent as HTML rather than as a download.
+    const file = path || 'index.html';
+    const body = await readFile(join(root, file));
     // CORS lets a page on another site fetch dist/psa.min.js while testing.
     res.writeHead(200, {
-      'content-type': types[extname(path)] || 'application/octet-stream',
+      'content-type': types[extname(file)] || 'application/octet-stream',
       'cache-control': 'no-store',
       'access-control-allow-origin': '*',
     });

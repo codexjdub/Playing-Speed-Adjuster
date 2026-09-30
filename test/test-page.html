@@ -115,6 +115,18 @@
       <button id="fs" type="button">Make this box fullscreen</button>
     </div>
   </section>
+
+  <section>
+    <h2>11. Live stream</h2>
+    <p>A MediaStream never ends, like live radio. It should stay at 1× and show “Live · normal speed”.</p>
+    <audio id="live" controls data-expect="11. Live stream"></audio>
+  </section>
+
+  <section>
+    <h2>12. Growing live stream (simulated)</h2>
+    <p>Like RTHK live radio: the duration is a number that grows by 10 s every second instead of being Infinity. It should drop back to 1×.</p>
+    <audio id="growing" controls data-tone="494" data-expect="12. Growing live stream (simulated)"></audio>
+  </section>
 </main>
 
 <script>
@@ -209,6 +221,30 @@
     (box.requestFullscreen || box.webkitRequestFullscreen).call(box);
   });
 
+  // 11. Live stream: a quiet tone from Web Audio, delivered as a MediaStream (duration is Infinity).
+  const live = document.getElementById('live');
+  try {
+    const context = new AudioContext();
+    const out = context.createMediaStreamDestination();
+    const tone = context.createOscillator();
+    const gain = context.createGain();
+    gain.gain.value = 0.03;
+    tone.connect(gain).connect(out);
+    tone.start();
+    live.srcObject = out.stream;
+  } catch (err) {
+    live.replaceWith(document.createTextNode('This browser cannot make a MediaStream: ' + err.message));
+  }
+
+  // 12. Growing live stream: fake the duration that chunked live players report.
+  const growing = document.getElementById('growing');
+  let grownTo = 30;
+  Object.defineProperty(growing, 'duration', { configurable: true, get: () => grownTo });
+  setInterval(() => {
+    grownTo += 10;
+    growing.dispatchEvent(new Event('durationchange'));
+  }, 1000);
+
   // ---- Toolbar ----
   document.getElementById('load').addEventListener('click', () => {
     const script = document.createElement('script');
@@ -259,16 +295,21 @@
     const snap = ctl.inspect();
     const rate = snap.rate;
     const byEl = new Map(snap.media.map((m) => [m.el, m]));
+    check(/^\d+\.\d+\.\d+$/.test(snap.version || ''), 'version reported', snap.version);
     for (const el of everyMedia()) {
       const name = el.dataset.expect || el.localName;
       const entry = byEl.get(el);
+      const expected = el === live || el === growing ? 1 : rate;
       check(!!entry, 'found: ' + name);
-      check(Math.abs(el.playbackRate - rate) < 0.005, 'speed ' + rate + '×: ' + name, 'is ' + el.playbackRate);
+      check(Math.abs(el.playbackRate - expected) < 0.005, 'speed ' + expected + '×: ' + name, 'is ' + el.playbackRate);
       if (entry && el.dataset.expect && el !== offPage) {
         check(entry.title === el.dataset.expect, 'title: ' + name, 'got "' + entry.title + '"');
       }
     }
     check(byEl.get(stubborn) && byEl.get(stubborn).locked, 'stubborn player is locked after fighting');
+    check(byEl.get(growing) && byEl.get(growing).live, 'growing duration is treated as live');
+    const normalTrack = byEl.get(document.querySelector('section audio'));
+    check(normalTrack && !normalTrack.live, 'normal track is not treated as live');
 
     // A reload resets playbackRate to defaultPlaybackRate; the controller should keep the speed.
     playlist.load();
@@ -279,6 +320,35 @@
     document.querySelectorAll('speed-ctl').forEach((node) => node.remove());
     await wait(800);
     check(!!document.querySelector('speed-ctl'), 'panel re-attached after removal');
+
+    // Skip buttons act on the active item (the one that most recently started) and stop at its start.
+    everyMedia().forEach((el) => el.pause());
+    const first = document.querySelector('section audio');
+    await first.play();
+    first.pause();
+    first.currentTime = 30;
+    await wait(700);
+    const panel = document.querySelector('speed-ctl').shadowRoot;
+    const back = panel.querySelector('[aria-label="Back 10 seconds"]');
+    const ahead = panel.querySelector('[aria-label="Forward 20 seconds"]');
+    back.click();
+    await wait(100);
+    check(Math.abs(first.currentTime - 20) < 0.5, 'skip back 10 s', 'at ' + first.currentTime.toFixed(1) + ' s');
+    ahead.click();
+    await wait(100);
+    check(Math.abs(first.currentTime - 40) < 0.5, 'skip forward 20 s', 'at ' + first.currentTime.toFixed(1) + ' s');
+    first.currentTime = 4;
+    await wait(100);
+    back.click();
+    await wait(100);
+    check(first.currentTime < 0.5, 'skip back stops at the start', 'at ' + first.currentTime.toFixed(1) + ' s');
+
+    // The live stream is left at 1× and labelled as live.
+    await live.play().catch(() => {});
+    await wait(700);
+    check(Math.abs(live.playbackRate - 1) < 0.005, 'live stream left at 1×', 'is ' + live.playbackRate);
+    const status = panel.querySelector('.sub').textContent;
+    check(/Live · normal speed/.test(status), 'live status shown', '"' + status + '"');
 
     everyMedia().forEach((el) => el.pause());
     const failed = lines.filter((l) => !l.ok).length;
