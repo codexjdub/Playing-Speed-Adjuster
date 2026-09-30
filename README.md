@@ -4,13 +4,13 @@ PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` a
 
 <img src="docs/panel.png" alt="The PSA panel: title and status, −10s / Play / +20s buttons, the speed readout at 1.50× with − and + buttons, and speed presets" width="320">
 
-- Speed from 0.25× to 4×: −/+ in 0.05 steps, presets (1, 1.25, 1.5, 1.75, 2, 2.5, 3), or click the readout and type a value (`1.6`, `1.6x`, `160%`).
+- Speed from 0.25× to 4×: −/+ in 0.05 steps, presets (1, 1.25, 1.5, 1.75, 2, 2.5, 3), click the readout and type a value (`1.6`, `1.6x`, `160%`), or use the [keyboard shortcuts](#keyboard-shortcuts).
 - Applies the speed to **every** audio and video element on the page, including ones added later, ones inside open shadow roots and same-origin iframes, and off-page `new Audio()` players.
 - Remembers the speed (and panel position) per site in `localStorage`.
 - Keeps re-applying the speed so sites that reset `playbackRate` don't win.
-- Play/Pause, −10 s / +20 s skips and a best-effort title for the active item (the one that most recently started playing). Use ‹ › to pick another item.
+- Play/Pause, −10 s / +20 s skips and a best-effort title for the active item (the one that most recently started playing). Use ‹ › to pick another item; the one you pick is outlined on the page, and scrolled into view if needed.
 - Live streams (live radio, anything without an end) stay at normal speed, since speeding them up only causes buffering.
-- Drag the panel by its top bar. It stays open until you click × or run the bookmarklet again.
+- Drag the panel by its top bar, or minimize it to a small pill that shows the speed (remembered per site). It stays open until you click × or run the bookmarklet again.
 
 ## Install
 
@@ -21,6 +21,18 @@ Or copy and paste: open [`dist/bookmarklet.txt`](dist/bookmarklet.txt) on GitHub
 The [test page](https://codexjdub.github.io/Playing-Speed-Adjuster/test/test-page.html) has many kinds of players and a button that runs automated checks.
 
 Click the bookmark on a page with audio or video to open the panel. Click it again, or click ×, to close it.
+
+## Keyboard shortcuts
+
+While the panel is open, including minimized:
+
+| Key | Action |
+| --- | --- |
+| `[` | Slow down by 0.1 |
+| `]` | Speed up by 0.1 |
+| `\` | Set 1.5× |
+
+They're ignored while you type in a text field, and ⌘ or Ctrl combinations are left to the browser (⌘[ is still Back). When PSA handles a key, the page doesn't also receive it.
 
 ## Updating
 
@@ -57,7 +69,7 @@ node build.mjs
 node test/serve.mjs
 ```
 
-Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and a live stream; it also checks the skip buttons. `.claude/launch.json` starts the same server for Claude Code's preview browser.
+Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and live streams; it also checks the skip buttons, minimizing, the outline and the keyboard shortcuts. `.claude/launch.json` starts the same server for Claude Code's preview browser.
 
 ## License
 

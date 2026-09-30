@@ -145,7 +145,7 @@
         <p class="version-note">Version %VERSION%. Your panel shows its version next to “PSA”. If yours is older, drag the button to your bookmarks bar again and delete the old bookmark.</p>
       </div>
       <div class="mock" aria-hidden="true">
-        <div class="mock-bar"><b>PSA<small>%VERSION%</small></b><span>‹ 1/2 ›</span><span>×</span></div>
+        <div class="mock-bar"><b>PSA<small>%VERSION%</small></b><span>‹ 1/2 ›</span><span>–</span><span>×</span></div>
         <div class="mock-meta"><strong>Morning news, part 1</strong><small>Playing · 3:12 / 24:40</small></div>
         <div class="mock-transport">
           <span class="mock-skip">−10s</span>
@@ -201,11 +201,11 @@
     <section id="features">
       <h2>What it does</h2>
       <div class="grid">
-        <div class="card"><h3>Any speed</h3><p>0.25× to 4×: presets, ± steps, or type a value like 1.6.</p></div>
+        <div class="card"><h3>Any speed</h3><p>0.25× to 4×: presets, ± steps, a typed value like 1.6, or the keys <kbd>[</kbd> <kbd>]</kbd> and <kbd>\</kbd> for 1.5×.</p></div>
         <div class="card"><h3>Stays put</h3><p>Remembers your speed on each site and puts it back when the site tries to reset it.</p></div>
-        <div class="card"><h3>Every player</h3><p>Works with several players on one page, including ones added later. ‹ › switches between them.</p></div>
+        <div class="card"><h3>Every player</h3><p>Works with several players on one page, including ones added later. ‹ › switches between them and outlines the one you picked.</p></div>
         <div class="card"><h3>Knows what's playing</h3><p>Shows a title, Play/Pause and −10 s / +20 s skips for the item that most recently started.</p></div>
-        <div class="card"><h3>Out of the way</h3><p>Drag the panel anywhere. It stays open until you close it and doesn't set off the site's keyboard shortcuts.</p></div>
+        <div class="card"><h3>Out of the way</h3><p>Drag the panel anywhere, or minimize it to a small pill that shows the speed. It stays open until you close it.</p></div>
         <div class="card"><h3>Private</h3><p>Runs only when you click it and makes no network requests. Settings stay in your browser.</p></div>
       </div>
     </section>
@@ -214,6 +214,7 @@
       <h2>Good to know</h2>
       <ul class="notes">
         <li>Media inside another site's embedded player, such as a YouTube video embedded in a blog, can't be reached. Open the video's own page and use PSA there.</li>
+        <li>Keyboard shortcuts while the panel is open, even minimized: <kbd>[</kbd> slows down by 0.1, <kbd>]</kbd> speeds up by 0.1, <kbd>\</kbd> sets 1.5×. They're ignored while you type in a text field, and ⌘ or Ctrl combinations are left to the browser.</li>
         <li>Live streams, such as live radio, stay at normal speed: they can't run ahead of the broadcast, so speeding them up would only make them buffer. The panel shows “Live · normal speed”.</li>
         <li>The speed is saved per site in that site's local storage, so clearing the site's data resets it.</li>
         <li>Tested in Chrome. It uses only standard web features that current Firefox, Safari and Edge also support; please <a href="https://github.com/codexjdub/Playing-Speed-Adjuster/issues">report problems on GitHub</a>.</li>

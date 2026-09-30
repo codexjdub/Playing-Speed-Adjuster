@@ -1,0 +1,28 @@
+# Fails when the committed bookmarklet (dist/) or install page (index.html) doesn't match src/,
+# so a stale build can't reach GitHub Pages unnoticed.
+name: Build check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Rebuild from src/
+        run: node build.mjs
+      - name: Check the committed build is up to date
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::dist/ or index.html is out of date. Run node build.mjs and commit the result."
+            exit 1
+          fi

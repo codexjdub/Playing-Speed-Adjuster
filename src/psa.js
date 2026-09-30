@@ -19,10 +19,13 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
+  const KEY_STEP = 0.1;
+  // Keyboard shortcuts while the panel is open: a speed change, or a fixed speed.
+  const KEYS = { '[': { by: -KEY_STEP }, ']': { by: KEY_STEP }, '\\': { to: 1.5 } };
   const PRESETS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const SKIP_BACK = 10;
   const SKIP_AHEAD = 20;
@@ -70,6 +73,7 @@
   const sameRate = (a, b) => Math.abs(a - b) < 0.005;
 
   let rate = clampRate(Number(saved.rate) || 1);
+  let minimized = saved.min === true;
 
   // ---- State ------------------------------------------------------------------------------------
 
@@ -93,6 +97,8 @@
   let timer = 0;
   let noteTimer = 0;
   let refreshQueued = false;
+  let glowUntil = 0;
+  let glowFrame = 0;
 
   // ---- Small helpers ----------------------------------------------------------------------------
 
@@ -299,11 +305,32 @@
   function attachRoot(root) {
     if (roots.has(root)) return;
     MEDIA_EVENTS.forEach((type) => root.addEventListener(type, onMediaEvent, true));
-    const unhook = root.nodeType === 9 ? hookPlay(root.defaultView) : null;
+    const win = root.nodeType === 9 ? root.defaultView : null;
+    const unhook = win ? hookPlay(win) : null;
+    // Capture on the window runs before the page's own key handlers, so a handled key doesn't reach them.
+    if (win) win.addEventListener('keydown', onKey, true);
     roots.set(root, () => {
       MEDIA_EVENTS.forEach((type) => root.removeEventListener(type, onMediaEvent, true));
       if (unhook) unhook();
+      if (win) win.removeEventListener('keydown', onKey, true);
     });
+  }
+
+  // Typing into a text field (the page's or the panel's own) never triggers a shortcut.
+  function isTyping(event) {
+    const node = typeof event.composedPath === 'function' ? event.composedPath()[0] : event.target;
+    if (!node || node.nodeType !== 1) return false;
+    return !!node.isContentEditable || /^(input|textarea|select)$/i.test(node.localName);
+  }
+
+  function onKey(event) {
+    const key = KEYS[event.key];
+    // ⌘ and Ctrl belong to the browser (⌘[ is Back); AltGr, which reports Ctrl+Alt, still types [ ] \ on some layouts.
+    if (!alive || !key || event.defaultPrevented || event.metaKey || (event.ctrlKey && !event.altKey)) return;
+    if (isTyping(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    setRate(key.to !== undefined ? key.to : rate + key.by);
   }
 
   function discoverRoots() {
@@ -633,6 +660,7 @@ button:active { background: rgba(255, 255, 255, 0.25); }
 button:disabled { opacity: 0.4; cursor: default; background: rgba(255, 255, 255, 0.09); }
 button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-offset: 1px; }
 .icon { width: 24px; height: 24px; padding: 0; font-size: 17px; line-height: 24px; background: transparent; }
+.icon svg { width: 14px; height: 14px; fill: currentColor; vertical-align: middle; }
 .meta { margin: 2px 0 10px; min-width: 0; }
 .transport { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px; }
 .skip { flex: none; width: 58px; height: 34px; padding: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -667,11 +695,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .presets button[aria-pressed="true"] { background: #5ea8ff; color: #0b1b2e; font-weight: 600; }
 .note { margin-top: 8px; font-size: 11px; color: #ffd28a; }
 .note[hidden] { display: none; }
+.panel[hidden] { display: none; }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
+  font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #f5f5f7; background: rgba(28, 28, 30, 0.96); border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); cursor: grab; touch-action: none;
+  -webkit-user-select: none; user-select: none; white-space: nowrap;
+}
+.pill:active { cursor: grabbing; }
+.pill:focus-visible { outline: 2px solid #5ea8ff; outline-offset: 2px; }
+.pill[hidden] { display: none; }
+.pill-name { opacity: 0.7; font-size: 12px; }
+.pill-rate { font-variant-numeric: tabular-nums; }
+.glow {
+  position: fixed; pointer-events: none; border: 3px solid #5ea8ff; border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(94, 168, 255, 0.35), 0 0 24px rgba(94, 168, 255, 0.5);
+  animation: glow-in 0.15s ease-out;
+}
+.glow[hidden] { display: none; }
+@keyframes glow-in { from { opacity: 0; } to { opacity: 1; } }
 `;
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const PLAY_PATH = 'M4.5 2.3v11.4c0 .6.6.9 1.1.6l8.6-5.7c.4-.3.4-.9 0-1.2L5.6 1.7c-.5-.3-1.1 0-1.1.6z';
   const PAUSE_PATH = 'M3.5 2h3v12h-3zM9.5 2h3v12h-3z';
+  const MINIMIZE_PATH = 'M3 11.5h10V13H3z';
   const GRIP_PATH = 'M4 1h3v3H4zM9 1h3v3H9zM4 6.5h3v3H4zM9 6.5h3v3H9zM4 12h3v3H4zM9 12h3v3H9z';
 
   function make(tag, className, text) {
@@ -753,12 +802,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     ui.count,
     button('icon', '›', 'Next media on this page', () => cycle(1))
   );
+  const minimizeButton = button('icon', null, 'Minimize', () => setMinimized(true));
+  minimizeButton.append(makeIcon(MINIMIZE_PATH).svg);
   const brand = make('span', 'brand', 'PSA');
   brand.append(make('span', 'version', VERSION));
   ui.bar.append(
     makeIcon(GRIP_PATH, 'grip').svg,
     brand,
     ui.nav,
+    minimizeButton,
     button('icon', '×', 'Close (click the bookmarklet again to reopen)', () => destroy())
   );
 
@@ -775,7 +827,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   const transport = make('div', 'transport');
   transport.append(ui.back, ui.play, ui.ahead);
 
-  ui.readout = button('readout', '', 'Click to type a speed', () => openEntry());
+  ui.readout = button('readout', '', 'Click to type a speed. Keys: [ slower, ] faster, \\ 1.5×', () => openEntry());
   ui.entry = make('input', 'entry');
   ui.entry.type = 'text';
   ui.entry.inputMode = 'decimal';
@@ -801,7 +853,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.note.setAttribute('role', 'status');
 
   ui.panel.append(ui.bar, meta, transport, speed, presetRow, ui.note);
-  shadow.append(ui.panel);
+
+  // The minimized panel: click to expand, drag to move.
+  ui.pill = make('div', 'pill');
+  ui.pill.tabIndex = 0;
+  ui.pill.setAttribute('role', 'button');
+  ui.pill.setAttribute('aria-label', 'Expand the PSA panel');
+  ui.pill.title = 'Click to expand, drag to move';
+  ui.pillRate = make('span', 'pill-rate');
+  ui.pill.append(make('span', 'pill-name', 'PSA'), ui.pillRate);
+  ui.pill.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setMinimized(false);
+    }
+  });
+
+  // Outline drawn over the page around the player chosen with ‹ ›.
+  ui.glow = make('div', 'glow');
+  ui.glow.hidden = true;
+
+  ui.panel.hidden = minimized;
+  ui.pill.hidden = !minimized;
+  shadow.append(ui.panel, ui.pill, ui.glow);
 
   // Keep the panel's keystrokes and clicks away from page shortcuts (YouTube's "k", digits, etc.).
   ['keydown', 'keyup', 'keypress', 'click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach(
@@ -912,6 +986,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       playIcon.path.setAttribute('d', playing ? PAUSE_PATH : PLAY_PATH);
     }
     setText(ui.readout, formatRate(rate));
+    setText(ui.pillRate, formatRate(rate));
     ui.presets.forEach(({ node, value }) => {
       const pressed = String(sameRate(value, rate));
       if (node.getAttribute('aria-pressed') !== pressed) node.setAttribute('aria-pressed', pressed);
@@ -976,6 +1051,88 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     picked = list[(index + delta + list.length) % list.length];
     pickedAt = Date.now();
     render();
+    highlight(picked);
+  }
+
+  function setMinimized(value) {
+    minimized = value;
+    save('min', value);
+    ui.panel.hidden = value;
+    ui.pill.hidden = !value;
+    if (value) ui.glow.hidden = true;
+    // The same top-left corner is kept; clamping keeps the larger panel on screen when it expands.
+    if (desired) placeAt(desired.x, desired.y);
+    if (!value) render();
+  }
+
+  // ---- Highlighting the chosen player -----------------------------------------------------------
+
+  // The media element itself, or its nearest ancestor with a visible box (a hidden <audio> behind a custom UI).
+  function visibleNode(el) {
+    let node = el;
+    for (let depth = 0; node && depth < 8; depth++) {
+      if (node.nodeType === 1) {
+        const r = node.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return node;
+      }
+      const parent = node.parentNode;
+      node = parent && parent.nodeType === 11 ? parent.host : parent;
+      if (node && node.nodeType === 9) return null;
+    }
+    return null;
+  }
+
+  // Its box in this window's coordinates, adding the offsets of any same-origin iframes it sits in.
+  function viewportRect(node) {
+    const r = node.getBoundingClientRect();
+    let left = r.left;
+    let top = r.top;
+    let win = node.ownerDocument.defaultView;
+    while (win && win !== window) {
+      let frame = null;
+      try {
+        frame = win.frameElement;
+      } catch (err) {
+        frame = null;
+      }
+      if (!frame) break;
+      const f = frame.getBoundingClientRect();
+      left += f.left + frame.clientLeft;
+      top += f.top + frame.clientTop;
+      win = frame.ownerDocument.defaultView;
+    }
+    return { left, top, width: r.width, height: r.height };
+  }
+
+  function highlight(el) {
+    if (!el.isConnected) {
+      showNote('This one plays off the page, so there is no player to show.');
+      return;
+    }
+    const node = visibleNode(el);
+    if (!node) return;
+    const box = viewportRect(node);
+    const view = viewport();
+    const offscreen =
+      box.top + box.height < 0 || box.top > view.height || box.left + box.width < 0 || box.left > view.width;
+    if (offscreen) safely(() => node.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    // Follow the player while the page scrolls, then fade away.
+    glowUntil = Date.now() + (offscreen ? 2400 : 1500);
+    ui.glow.hidden = false;
+    cancelAnimationFrame(glowFrame);
+    const follow = () => {
+      if (!alive || minimized || Date.now() > glowUntil || !node.isConnected) {
+        ui.glow.hidden = true;
+        return;
+      }
+      const now = viewportRect(node);
+      ui.glow.style.left = now.left - 4 + 'px';
+      ui.glow.style.top = now.top - 4 + 'px';
+      ui.glow.style.width = now.width + 8 + 'px';
+      ui.glow.style.height = now.height + 8 + 'px';
+      glowFrame = requestAnimationFrame(follow);
+    };
+    follow();
   }
 
   // ---- Position and dragging --------------------------------------------------------------------
@@ -1001,25 +1158,41 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     return { x: left, y: top };
   }
 
+  // Both the panel's top bar and the minimized pill drag the panel. A press that doesn't move
+  // (less than 4px) is a click, which expands the pill.
   let drag = null;
-  ui.bar.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0 || event.target.closest('button')) return;
-    const box = host.getBoundingClientRect();
-    drag = { id: event.pointerId, dx: event.clientX - box.left, dy: event.clientY - box.top };
-    safely(() => ui.bar.setPointerCapture(event.pointerId));
-    event.preventDefault();
+  [ui.bar, ui.pill].forEach((handle) => {
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || event.target.closest('button')) return;
+      const box = host.getBoundingClientRect();
+      drag = {
+        id: event.pointerId,
+        handle,
+        x: event.clientX,
+        y: event.clientY,
+        dx: event.clientX - box.left,
+        dy: event.clientY - box.top,
+        moved: false,
+      };
+      safely(() => handle.setPointerCapture(event.pointerId));
+      event.preventDefault();
+    });
+    handle.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      if (!drag.moved && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) < 4) return;
+      drag.moved = true;
+      desired = placeAt(event.clientX - drag.dx, event.clientY - drag.dy);
+    });
+    const endDrag = (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const ended = drag;
+      drag = null;
+      if (ended.moved) save('pos', desired);
+      else if (ended.handle === ui.pill && event.type === 'pointerup') setMinimized(false);
+    };
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
   });
-  ui.bar.addEventListener('pointermove', (event) => {
-    if (!drag || event.pointerId !== drag.id) return;
-    desired = placeAt(event.clientX - drag.dx, event.clientY - drag.dy);
-  });
-  const endDrag = (event) => {
-    if (!drag || event.pointerId !== drag.id) return;
-    drag = null;
-    if (desired) save('pos', desired);
-  };
-  ui.bar.addEventListener('pointerup', endDrag);
-  ui.bar.addEventListener('pointercancel', endDrag);
 
   function onResize() {
     if (desired) placeAt(desired.x, desired.y);
@@ -1090,6 +1263,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     alive = false;
     clearInterval(timer);
     clearTimeout(noteTimer);
+    cancelAnimationFrame(glowFrame);
     roots.forEach((undo) => safely(undo));
     roots.clear();
     watched.forEach((undo) => safely(undo));
@@ -1110,6 +1284,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     inspect: () => ({
       version: VERSION,
       rate,
+      minimized,
       target,
       media: mediaList.map((el) => ({ el, title: titleOf(el), locked: locked.has(el), live: isLive(el) })),
     }),

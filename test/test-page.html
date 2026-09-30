@@ -24,6 +24,7 @@
   .row p { margin: 0; color: var(--fg); }
   iframe { width: 100%; height: 150px; border: 1px dashed var(--line); border-radius: 8px; }
   button { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; cursor: pointer; }
+  .toolbar input { flex: 1 1 240px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; padding: 10px 0; background: var(--bg); z-index: 1; }
   #fsbox { padding: 12px; border-radius: 8px; background: var(--bg); }
   #results { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
@@ -43,6 +44,7 @@
     <button id="checks" type="button">Run checks</button>
     <button id="rerender" type="button">Remove panel (simulate re-render)</button>
     <button id="stopall" type="button">Pause everything</button>
+    <input id="typing" type="text" placeholder="Typing [ ] \ here must not change the speed" aria-label="Text box for the typing check">
   </div>
   <div id="results" aria-live="polite"></div>
 
@@ -349,6 +351,54 @@
     check(Math.abs(live.playbackRate - 1) < 0.005, 'live stream left at 1×', 'is ' + live.playbackRate);
     const status = panel.querySelector('.sub').textContent;
     check(/Live · normal speed/.test(status), 'live status shown', '"' + status + '"');
+
+    // ‹ › outlines the chosen player on the page.
+    const next = panel.querySelector('[aria-label="Next media on this page"]');
+    next.click();
+    await wait(1000); // an off-screen player is scrolled into view first
+    const glow = panel.querySelector('.glow');
+    const chosen = ctl.inspect().target;
+    const glowBox = glow.getBoundingClientRect();
+    const chosenBox = chosen && chosen.isConnected ? chosen.getBoundingClientRect() : null;
+    check(!glow.hidden, 'switching players shows an outline');
+    check(!!chosenBox && glowBox.left <= chosenBox.left && glowBox.right >= chosenBox.right, 'outline surrounds the chosen player');
+    await wait(2000);
+    check(glow.hidden, 'outline goes away');
+
+    // Minimize to the pill and back; the state is remembered.
+    panel.querySelector('[aria-label="Minimize"]').click();
+    await wait(100);
+    const pill = panel.querySelector('.pill');
+    check(!pill.hidden && panel.querySelector('.panel').hidden, 'minimize shows the pill');
+    check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === true, 'minimized state is saved');
+    check(pill.textContent.includes(ctl.inspect().rate.toFixed(2)), 'pill shows the speed', pill.textContent);
+    pill.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
+    pill.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
+    await wait(100);
+    check(pill.hidden && !panel.querySelector('.panel').hidden, 'clicking the pill expands the panel');
+    check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === false, 'expanded state is saved');
+
+    // Keyboard shortcuts: [ ] \ change the speed, but not while typing, and the page never sees handled keys.
+    let pageSawKey = 0;
+    const countKeys = (event) => { if ('[]\\'.includes(event.key)) pageSawKey += 1; };
+    document.addEventListener('keydown', countKeys);
+    const press = (key, on = document.body) => on.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true }));
+    const start = ctl.inspect().rate;
+    press(']');
+    check(Math.abs(ctl.inspect().rate - Math.min(4, start + 0.1)) < 0.005, '] speeds up by 0.1', start + ' → ' + ctl.inspect().rate);
+    press('[');
+    check(Math.abs(ctl.inspect().rate - start) < 0.005, '[ slows down by 0.1', '→ ' + ctl.inspect().rate);
+    press('\\');
+    check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, '\\ sets 1.5×', '→ ' + ctl.inspect().rate);
+    check(pageSawKey === 0, 'the page does not also receive handled keys', pageSawKey + ' seen');
+    const typing = document.getElementById('typing');
+    typing.focus();
+    press(']', typing);
+    check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys are ignored while typing', 'rate ' + ctl.inspect().rate);
+    typing.blur();
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ']', metaKey: true, bubbles: true, cancelable: true }));
+    check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys with ⌘ are left to the browser', 'rate ' + ctl.inspect().rate);
+    document.removeEventListener('keydown', countKeys);
 
     everyMedia().forEach((el) => el.pause());
     const failed = lines.filter((l) => !l.ok).length;
