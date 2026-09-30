@@ -1,0 +1,30 @@
+# Runs the test page's checks and the real bookmarklet link in three browser engines:
+# Chromium, Firefox and WebKit (Safari's engine).
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install test tools
+        run: npm ci
+      - name: Install the browser
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Run the checks
+        run: node test/run-checks.mjs --browser ${{ matrix.browser }}

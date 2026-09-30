@@ -67,12 +67,19 @@ Bump `VERSION` at the top of `src/psa.js` for each release; the build copies it 
 ```
 npm ci
 node build.mjs
-node test/serve.mjs
+npm test
 ```
 
-`npm ci` installs terser, the only build tool (Node 18+). A GitHub Action rebuilds on every push and fails if the committed `dist/` or `index.html` doesn't match `src/`.
+`npm ci` installs the development tools (Node 18+): terser for the build and Playwright for the tests. Neither goes into the bookmarklet.
 
-Then open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and live streams; it also checks the skip buttons, minimizing, the outline and the keyboard shortcuts. `.claude/launch.json` starts the same server for Claude Code's preview browser.
+`npm test` opens the test page in headless Chrome, using your installed copy so nothing extra is downloaded. It runs the page's checks and clicks the real bookmarklet link on the install page. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and live streams; it also checks the skip buttons, minimizing, the outline and the keyboard shortcuts.
+
+To try things by hand, run `node test/serve.mjs`, open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. `.claude/launch.json` starts the same server for Claude Code's preview browser.
+
+On every push, two GitHub Actions run:
+
+- **Build check:** rebuilds and fails if the committed `dist/` or `index.html` doesn't match `src/`.
+- **Tests:** runs the same checks in Chromium, Firefox and WebKit (Safari's engine).
 
 ## License
 

@@ -5,9 +5,11 @@
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
-    "serve": "node test/serve.mjs"
+    "serve": "node test/serve.mjs",
+    "test": "node test/run-checks.mjs --browser chromium --channel chrome"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "terser": "^5.51.2"
   }
 }
