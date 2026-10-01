@@ -19,7 +19,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -120,9 +120,12 @@
   // ---- Speed enforcement ------------------------------------------------------------------------
 
   // A live stream (live radio, a MediaStream) has no end. It can't run ahead of the broadcast,
-  // so speeding it up only causes buffering. Most report an Infinity duration; players that stream
-  // in chunks (hls.js and similar, e.g. RTHK live radio) instead report a duration that keeps growing.
-  const isLive = (el) => el.duration === Infinity || (growth.get(el) || { increases: 0 }).increases >= 2;
+  // so speeding it up only causes buffering. A MediaStream source is live by definition, even before
+  // it has loaded. Others report an Infinity duration, or, in players that stream in chunks
+  // (hls.js and similar, e.g. RTHK live radio), a duration that keeps growing.
+  const isStream = (el) => !!el.srcObject && typeof el.srcObject.getTracks === 'function';
+  const isLive = (el) =>
+    isStream(el) || el.duration === Infinity || (growth.get(el) || { increases: 0 }).increases >= 2;
 
   function noteDuration(el) {
     const duration = el.duration;

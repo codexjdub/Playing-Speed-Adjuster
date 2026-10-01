@@ -367,6 +367,16 @@
       const status = panel.querySelector('.sub').textContent;
       check(/Live · normal speed/.test(status), 'live status shown', '"' + status + '"');
 
+      // A MediaStream counts as live from the start, before it has loaded anything.
+      const quiet = document.createElement('audio');
+      quiet.srcObject = new MediaStream();
+      document.getElementById('late').append(quiet);
+      await wait(700);
+      const quietEntry = ctl.inspect().media.find((m) => m.el === quiet);
+      check(!!quietEntry && quietEntry.live && Math.abs(quiet.playbackRate - 1) < 0.005, 'a stream is live before it loads',
+        'readyState ' + quiet.readyState + ', rate ' + quiet.playbackRate);
+      quiet.remove();
+
       progress('outline');
       // ‹ › outlines the chosen player on the page.
       const next = panel.querySelector('[aria-label="Next media on this page"]');
