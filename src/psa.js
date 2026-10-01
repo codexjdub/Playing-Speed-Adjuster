@@ -1,8 +1,8 @@
 /*
  * Playing Speed Adjuster (PSA) — a site-independent bookmarklet for HTML5 <audio> and <video>.
  *
- * This file is the readable source. `node build.mjs` turns it into dist/bookmarklet.txt and
- * dist/install.html. Running the bookmarklet while the panel is open closes the panel.
+ * This file is the readable source. `npm run build` turns it into dist/bookmarklet.txt and the
+ * install page (index.html). Running the bookmarklet while the panel is open closes the panel.
  *
  * The UI is built with DOM calls only (no innerHTML) so it works on Trusted Types pages such as YouTube.
  */

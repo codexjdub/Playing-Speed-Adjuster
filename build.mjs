@@ -1,11 +1,10 @@
 // Builds the bookmarklet from src/psa.js. Needs terser (a dev dependency):
 //
 //   npm ci
-//   node build.mjs
+//   npm run build
 //
 // Writes dist/psa.min.js (plain script, used by the test page), dist/bookmarklet.txt (the javascript: URL),
 // and index.html, the install page (from src/install.html) that GitHub Pages serves at the site root.
-// dist/install.html is a redirect to it for links from before the page moved.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,18 +55,9 @@ const install = template
   .replaceAll('%VERSION%', version)
   .replaceAll('%BOOKMARKLET%', () => bookmarklet);
 
-const redirect = `<!doctype html>
-<meta charset="utf-8">
-<title>Playing Speed Adjuster (PSA)</title>
-<meta http-equiv="refresh" content="0; url=../">
-<link rel="canonical" href="../">
-<p>The install page has moved to <a href="../">the site's front page</a>.</p>
-`;
-
 mkdirSync(dist, { recursive: true });
 writeFileSync(join(dist, 'psa.min.js'), code + '\n');
 writeFileSync(join(dist, 'bookmarklet.txt'), bookmarklet + '\n');
-writeFileSync(join(dist, 'install.html'), redirect);
 writeFileSync(join(root, 'index.html'), install);
 
 console.log(`Built PSA ${version}: ${code.length} chars of code, ${bookmarklet.length} chars as a URL.`);

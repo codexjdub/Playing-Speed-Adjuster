@@ -40,10 +40,10 @@ Bookmarklets don't update themselves. The panel shows its version next to "PSA",
 
 ## How it works
 
-`src/psa.js` is the readable source and `src/install.html` is the install page template; `node build.mjs` rebuilds `dist/` and the site's `index.html`. The build minifies the code with [terser](https://terser.org/), checks the result parses, and percent-encodes only the characters a `javascript:` URL can't carry, which keeps the bookmarklet around 26 KB.
+`src/psa.js` is the readable source and `src/install.html` is the install page template; `npm run build` rebuilds `dist/` and the site's `index.html`. The build minifies the code with [terser](https://terser.org/), checks the result parses, and percent-encodes only the characters a `javascript:` URL can't carry, which keeps the bookmarklet around 26 KB.
 
 - **Finding media.** Every 500 ms the panel queries each known document and shadow root for `audio, video`; every 2 s it re-walks the page to find new open shadow roots and same-origin iframes. While the panel is open, `HTMLMediaElement.prototype.play` is wrapped so players that are never inserted into the page are found too; closing the panel restores it.
-- **Holding the speed.** Live streams are left alone: a MediaStream source, an `Infinity` duration, or a duration that keeps growing (chunked live players such as RTHK live radio). One that was sped up before it was known to be live is put back to 1×. For everything else it sets both `playbackRate` and `defaultPlaybackRate`, the latter because `load()` resets to it. It re-applies on `ratechange`, `play`, `loadstart` and `loadedmetadata`, and on every tick. If a site resets an element more than 8 times in 2 s, the panel replaces that element's `playbackRate` setter so the page's writes are ignored ("speed locked" in the panel). Closing the panel removes the lock.
+- **Holding the speed.** Live streams are left alone: a MediaStream source, an `Infinity` duration, or a duration that keeps growing (chunked live players such as RTHK live radio). One that was sped up before it was known to be live is put back to 1×. For everything else it sets both `playbackRate` and `defaultPlaybackRate`, the latter because `load()` resets to it. It re-applies whenever the page changes a player's speed or source, when a player starts, and on every tick. If a site resets an element more than 8 times in 2 s, the panel replaces that element's `playbackRate` setter so the page's writes are ignored ("speed locked" in the panel). Closing the panel removes the lock.
 - **Titles**, first match wins:
   1. The element's own `aria-label`, `aria-labelledby` or `title`.
   2. Text next to the player: walk outwards one container at a time and take the first visible heading, else visible text. Skip player controls, timecodes, text drawn over the video, and screen-reader-only text. Stop before a container that holds another player, because shared text can't tell them apart.
@@ -66,7 +66,7 @@ Bump `VERSION` at the top of `src/psa.js` for each release; the build copies it 
 
 ```
 npm ci
-node build.mjs
+npm run build
 npm test
 ```
 
@@ -74,7 +74,7 @@ npm test
 
 `npm test` opens the test page in headless Chrome, using your installed copy so nothing extra is downloaded. It runs the page's checks and clicks the real bookmarklet link on the install page. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, and live streams; it also checks the skip buttons, minimizing, the outline and the keyboard shortcuts.
 
-To try things by hand, run `node test/serve.mjs`, open http://127.0.0.1:8765/test/test-page.html, click **Load controller**, pick a speed other than 1×, and click **Run checks**. `.claude/launch.json` starts the same server for Claude Code's preview browser.
+To try things by hand, run `npm run serve`, open http://127.0.0.1:8765/test/test-page.html, click **Load PSA**, pick a speed other than 1×, and click **Run checks**.
 
 On every push, two GitHub Actions run:
 

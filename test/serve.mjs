@@ -1,4 +1,4 @@
-// Minimal static server for the test page: node test/serve.mjs, then open
+// Minimal static server for the test page: npm run serve, then open
 // http://127.0.0.1:8765/test/test-page.html
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
