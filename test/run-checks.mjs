@@ -49,10 +49,33 @@ const browser = await engines[browserName].launch({
 const lines = [];
 const pass = (text) => lines.push({ ok: true, text: 'PASS ' + text });
 const fail = (text) => lines.push({ ok: false, text: 'FAIL ' + text });
+const consoleMessages = [];
+let diagnostics = null;
+
+// Where the test page got to, its errors and every player's state: printed when something fails.
+const diagnose = (page) =>
+  page
+    .evaluate(() => ({
+      progress: window.__speedCtlCheckProgress || [],
+      psaRunning: !!window.__speedCtl,
+      players: [...document.querySelectorAll('audio, video')].map((el) => ({
+        name: el.dataset.expect || el.id || el.localName,
+        readyState: el.readyState,
+        paused: el.paused,
+        error: el.error ? el.error.code + ' ' + (el.error.message || '') : null,
+        time: Math.round(el.currentTime * 10) / 10,
+        duration: el.duration,
+        rate: el.playbackRate,
+      })),
+    }))
+    .catch((err) => ({ unavailable: err.message.split('\n')[0] }));
 
 try {
   const page = await browser.newPage();
   page.on('pageerror', (err) => fail('uncaught error on ' + page.url() + ': ' + err.message));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' || msg.type() === 'warning') consoleMessages.push(msg.type() + ': ' + msg.text());
+  });
 
   // 1. The test page's own checks.
   await page.goto(base + '/test/test-page.html');
@@ -63,8 +86,13 @@ try {
   await page.click('#checks');
   const results = await page
     .waitForFunction(() => window.__speedCtlCheckResults, null, { timeout: 90000 })
-    .then((handle) => handle.jsonValue());
+    .then((handle) => handle.jsonValue())
+    .catch((err) => {
+      fail('the test page did not finish its checks: ' + err.message.split('\n')[0]);
+      return { lines: [] };
+    });
   results.lines.forEach((text) => lines.push({ ok: text.startsWith('PASS'), text }));
+  diagnostics = await diagnose(page);
 
   // 2. The real bookmarklet link: the encoded javascript: URL must run and report this version.
   await page.goto(base + '/');
@@ -86,4 +114,8 @@ const failed = lines.filter((line) => !line.ok);
 console.log('PSA ' + version + ' · ' + browserName + (channel ? ' (' + channel + ')' : '') + '\n');
 lines.forEach((line) => console.log(line.text));
 console.log('\n' + (failed.length ? failed.length + ' of ' + lines.length + ' checks failed' : 'All ' + lines.length + ' checks passed'));
+if (failed.length) {
+  console.log('\nDiagnostics from the test page:\n' + JSON.stringify(diagnostics, null, 2));
+  if (consoleMessages.length) console.log('\nBrowser console:\n' + consoleMessages.join('\n'));
+}
 process.exit(failed.length ? 1 : 0);
