@@ -106,7 +106,7 @@ try {
       fail('the test page did not finish its checks: ' + err.message.split('\n')[0]);
       return { lines: [] };
     });
-  results.lines.forEach((text) => lines.push({ ok: text.startsWith('PASS'), text }));
+  results.lines.forEach((text) => lines.push({ ok: !text.startsWith('FAIL'), text }));
   diagnostics = await diagnose(page);
 
   // 2. The real bookmarklet link: the encoded javascript: URL must run and report this version.
@@ -125,9 +125,15 @@ try {
 }
 
 const failed = lines.filter((line) => !line.ok);
+const skipped = lines.filter((line) => line.text.startsWith('SKIP')).length;
 console.log('PSA ' + version + ' · ' + browserName + (channel ? ' (' + channel + ')' : '') + '\n');
 lines.forEach((line) => console.log(line.text));
-console.log('\n' + (failed.length ? failed.length + ' of ' + lines.length + ' checks failed' : 'All ' + lines.length + ' checks passed'));
+console.log(
+  '\n' +
+    (failed.length
+      ? failed.length + ' of ' + lines.length + ' checks failed'
+      : 'All ' + (lines.length - skipped) + ' checks passed' + (skipped ? ', ' + skipped + ' skipped' : ''))
+);
 if (failed.length) {
   console.log('\nDiagnostics from the test page:\n' + JSON.stringify(diagnostics, null, 2));
   if (consoleMessages.length) console.log('\nBrowser console:\n' + consoleMessages.join('\n'));

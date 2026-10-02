@@ -29,7 +29,7 @@
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; padding: 10px 0; background: var(--bg); z-index: 1; }
   #fsbox { padding: 12px; border-radius: 8px; background: var(--bg); }
   #results { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
-  .pass { color: var(--pass); } .fail { color: var(--fail); }
+  .pass { color: var(--pass); } .fail { color: var(--fail); } .skip { color: var(--muted); }
   .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
   .sr-only span { display: inline-block; width: 100px; }
 </style>
@@ -286,6 +286,9 @@
   // ---- Checks: assert what PSA reports against what the page expects ----
   const results = document.getElementById('results');
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // A player's state, for check details.
+  const stateOf = (el) => !el ? 'none' : (el.dataset.expect || el.localName) + ' (' + (el.paused ? 'paused' : 'playing') +
+    (el.ended ? ', ended' : '') + ', at ' + el.currentTime.toFixed(1) + ' s, ready ' + el.readyState + (el.isConnected ? '' : ', off-page') + ')';
   const until = async (test, ms) => {
     for (const end = Date.now() + ms; !test() && Date.now() < end; ) await wait(100);
   };
@@ -303,6 +306,7 @@
   async function runChecks() {
     const lines = [];
     const check = (ok, name, detail) => lines.push({ ok, text: (ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' — ' + detail : '') });
+    const skip = (name, why) => lines.push({ ok: true, text: 'SKIP ' + name + ' — ' + why });
     const ctl = window.__speedCtl;
     if (!ctl) {
       results.textContent = 'PSA is not running. Click "Load PSA" or your bookmarklet first.';
@@ -318,18 +322,26 @@
       // Media Session titles only count while one item is playing, so check the off-page one on its own.
       everyMedia().forEach((el) => el.pause());
       document.getElementById('offplay').click();
+      offPage.muted = true; // quiet, like the other players during the checks
       await wait(2500);
       const offEntry = ctl.inspect().media.find((m) => m.el === offPage);
       check(!!offEntry && offEntry.title === 'Off-page tone', 'title: Off-page tone (Media Session)',
         offEntry ? 'got "' + offEntry.title + '"' : 'not found');
-      // Pausing it from the panel keeps it there, so the panel can resume it.
-      const playButton = document.querySelector('speed-ctl').shadowRoot.querySelector('.play');
-      playButton.click();
-      await wait(700);
-      check(offPage.paused && ctl.inspect().target === offPage, 'paused off-page audio stays in the panel');
-      playButton.click();
-      await until(() => !offPage.paused, 3000);
-      check(!offPage.paused, 'the panel resumes off-page audio');
+      // Pausing it from the panel keeps it there, so the panel can resume it. That needs the tone to really
+      // play: WebKit on the GitHub runners reports it ended almost at once.
+      if (!offPage.paused && !offPage.ended) {
+        const playButton = document.querySelector('speed-ctl').shadowRoot.querySelector('.play');
+        playButton.click();
+        await wait(700);
+        check(offPage.paused && ctl.inspect().target === offPage, 'paused off-page audio stays in the panel',
+          'target ' + stateOf(ctl.inspect().target) + ', off-page ' + stateOf(offPage));
+        playButton.click();
+        await until(() => !offPage.paused, 3000);
+        check(!offPage.paused, 'the panel resumes off-page audio', stateOf(offPage));
+      } else {
+        skip('paused off-page audio stays in the panel', 'the tone did not play here: ' + stateOf(offPage));
+        skip('the panel resumes off-page audio', 'the tone did not play here');
+      }
 
       // Start a few more players so the fighting and reload paths are exercised.
       const started = await Promise.all([stubborn, playlist, document.getElementById('late-audio')].filter(Boolean).map((el) => startPlaying(el)));
@@ -346,7 +358,7 @@
         const name = el.dataset.expect || el.localName;
         const entry = byEl.get(el);
         const expected = el === live || el === growing ? 1 : rate;
-        check(!!entry, 'found: ' + name);
+        check(!!entry, 'found: ' + name, entry ? '' : stateOf(el));
         check(Math.abs(el.playbackRate - expected) < 0.005, 'speed ' + expected + '×: ' + name, 'is ' + el.playbackRate);
         if (entry && el.dataset.expect && el !== offPage) {
           check(entry.title === el.dataset.expect, 'title: ' + name, 'got "' + entry.title + '"');
@@ -492,14 +504,17 @@
 
     everyMedia().forEach((el) => el.pause());
     const failed = lines.filter((l) => !l.ok).length;
+    const skipped = lines.filter((l) => l.text.startsWith('SKIP')).length;
     results.textContent = '';
     const summary = document.createElement('div');
     summary.className = failed ? 'fail' : 'pass';
-    summary.textContent = failed ? failed + ' of ' + lines.length + ' checks failed' : 'All ' + lines.length + ' checks passed';
+    summary.textContent = failed
+      ? failed + ' of ' + lines.length + ' checks failed'
+      : 'All ' + (lines.length - skipped) + ' checks passed' + (skipped ? ', ' + skipped + ' skipped' : '');
     results.append(summary);
     lines.forEach((l) => {
       const row = document.createElement('div');
-      row.className = l.ok ? 'pass' : 'fail';
+      row.className = l.ok ? (l.text.startsWith('SKIP') ? 'skip' : 'pass') : 'fail';
       row.textContent = l.text;
       results.append(row);
     });
