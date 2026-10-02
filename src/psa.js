@@ -19,7 +19,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -39,6 +39,14 @@
   // A duration that grows counts as a sign of a live stream at most this often.
   const GROWTH_GAP_MS = 1500;
   const STORE_KEY = 'speedCtl.v1';
+  // Where recordings were left, kept apart from the settings: { key: [seconds, savedAt] }.
+  const RESUME_KEY = 'speedCtl.resume.v1';
+  // Only recordings this long are remembered (not ads or short clips), only once past RESUME_MIN_S,
+  // and a recording within RESUME_MIN_S of its end counts as finished.
+  const RESUME_MIN_LENGTH_S = 180;
+  const RESUME_MIN_S = 30;
+  const RESUME_SAVE_MS = 5000;
+  const RESUME_KEEP = 100;
   const MEDIA_EVENTS = [
     'play',
     'playing',
@@ -49,6 +57,8 @@
     'loadedmetadata',
     'durationchange',
     'emptied',
+    'enterpictureinpicture',
+    'leavepictureinpicture',
   ];
 
   // ---- Per-site storage -------------------------------------------------------------------------
@@ -244,6 +254,62 @@
     render();
   }
 
+  // ---- Resume positions -------------------------------------------------------------------------
+  // A recording is known by its page and length. Many sites play through a blob: address that changes
+  // on every visit, so the media's own address can't be used.
+
+  const lastSaved = new WeakMap(); // element -> when its position was last written
+
+  function resumeKey(el) {
+    const duration = el.duration;
+    if (!isFinite(duration) || duration < RESUME_MIN_LENGTH_S || isLive(el)) return '';
+    const page = el.ownerDocument.location || location;
+    return page.pathname + page.search + ' ' + Math.round(duration);
+  }
+
+  function loadPositions() {
+    try {
+      const value = JSON.parse(localStorage.getItem(RESUME_KEY));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function savedPosition(el) {
+    const key = resumeKey(el);
+    const entry = key ? loadPositions()[key] : null;
+    return Array.isArray(entry) && isFinite(entry[0]) ? entry[0] : 0;
+  }
+
+  // Every RESUME_SAVE_MS while playing, and at once (`now`) on pause, at the end, or when leaving the page.
+  function notePosition(el, now) {
+    const key = resumeKey(el);
+    if (!key) return;
+    const time = Date.now();
+    if (!now && time - (lastSaved.get(el) || 0) < RESUME_SAVE_MS) return;
+    const at = el.currentTime;
+    const finished = el.ended || at > el.duration - RESUME_MIN_S;
+    // Near the start, an older position is kept: it is what the panel offers to go back to.
+    if (!finished && at < RESUME_MIN_S) return;
+    lastSaved.set(el, time);
+    try {
+      // Merged into what is stored now, so other tabs on this site keep theirs.
+      const positions = loadPositions();
+      if (finished) delete positions[key];
+      else positions[key] = [Math.floor(at), time];
+      const keys = Object.keys(positions);
+      const savedAt = (k) => (Array.isArray(positions[k]) && positions[k][1]) || 0;
+      keys
+        .sort((a, b) => savedAt(a) - savedAt(b))
+        .slice(0, Math.max(0, keys.length - RESUME_KEEP))
+        .forEach((k) => delete positions[k]);
+      localStorage.setItem(RESUME_KEY, JSON.stringify(positions));
+    } catch (err) {
+      // Storage is blocked or full.
+    }
+  }
+
   // ---- Media discovery --------------------------------------------------------------------------
 
   function markStarted(el) {
@@ -269,6 +335,8 @@
       applyRate(el);
     } else if (event.type === 'playing' || event.type === 'loadedmetadata') {
       applyRate(el);
+    } else if (event.type === 'pause' || event.type === 'ended') {
+      notePosition(el, true);
     }
     scheduleRefresh();
   }
@@ -702,7 +770,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .icon { width: 24px; height: 24px; padding: 0; font-size: 17px; line-height: 24px; background: transparent; }
 .icon svg { width: 14px; height: 14px; fill: currentColor; vertical-align: middle; }
 .meta { margin: 2px 0 10px; min-width: 0; }
-.transport { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px; }
+.transport {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px;
+}
+.pip { position: absolute; right: 0; top: 50%; margin-top: -12px; }
+.pip[hidden] { display: none; }
+.resume {
+  display: block; width: 100%; height: 30px; margin: -2px 0 10px; padding: 0 8px;
+  background: #5ea8ff; color: #0b1b2e; font-weight: 600;
+}
+.resume:hover { background: #7db9ff; }
+.resume[hidden] { display: none; }
 .skip { flex: none; width: 58px; height: 34px; padding: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .play {
   flex: none; width: 40px; height: 40px; padding: 0; border-radius: 50%;
@@ -761,6 +839,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   const PLAY_PATH = 'M4.5 2.3v11.4c0 .6.6.9 1.1.6l8.6-5.7c.4-.3.4-.9 0-1.2L5.6 1.7c-.5-.3-1.1 0-1.1.6z';
   const PAUSE_PATH = 'M3.5 2h3v12h-3zM9.5 2h3v12h-3z';
   const MINIMIZE_PATH = 'M3 11.5h10V13H3z';
+  const PIP_PATH = 'M1 3h14v10H1zM2.5 4.5v7h11v-7zM8 8h4.5v2.5H8z';
   const GRIP_PATH = 'M4 1h3v3H4zM9 1h3v3H9zM4 6.5h3v3H4zM9 6.5h3v3H9zM4 12h3v3H4zM9 12h3v3H9z';
 
   function make(tag, className, text) {
@@ -864,8 +943,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.play.append(playIcon.svg);
   ui.back = button('skip', '−' + SKIP_BACK + 's', 'Back ' + SKIP_BACK + ' seconds', () => skip(-SKIP_BACK));
   ui.ahead = button('skip', '+' + SKIP_AHEAD + 's', 'Forward ' + SKIP_AHEAD + ' seconds', () => skip(SKIP_AHEAD));
+  // Shown for videos when the browser has picture-in-picture.
+  ui.pip = button('icon pip', null, 'Picture-in-picture', () => togglePip());
+  ui.pip.append(makeIcon(PIP_PATH).svg);
+  ui.pip.hidden = true;
   const transport = make('div', 'transport');
-  transport.append(ui.back, ui.play, ui.ahead);
+  transport.append(ui.back, ui.play, ui.ahead, ui.pip);
+
+  // Offered when a recording that was left part-way on an earlier visit is played from near the start.
+  ui.resume = button('resume', '', null, () => resume());
+  ui.resume.hidden = true;
 
   ui.readout = button('readout', '', 'Click to type a speed. Keys: [ slower, ] faster, \\ 1.5×', () => openEntry());
   ui.entry = make('input', 'entry');
@@ -892,7 +979,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.note.hidden = true;
   ui.note.setAttribute('role', 'status');
 
-  ui.panel.append(ui.bar, meta, transport, speed, presetRow, ui.note);
+  ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.note);
 
   // The minimized panel: click to expand, drag to move.
   ui.pill = make('div', 'pill');
@@ -1038,6 +1125,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       ui.play.title = label;
       playIcon.path.setAttribute('d', playing ? PAUSE_PATH : PLAY_PATH);
     }
+    // A <video> playing only sound (some sites use one for audio) turns out to have no picture once it loads.
+    const canPip =
+      !!el &&
+      el.localName === 'video' &&
+      el.ownerDocument.pictureInPictureEnabled === true &&
+      !(el.readyState >= 1 && el.videoWidth === 0);
+    ui.pip.hidden = !canPip;
+    if (canPip) {
+      const pipLabel = el.ownerDocument.pictureInPictureElement === el ? 'Leave picture-in-picture' : 'Picture-in-picture';
+      if (ui.pip.getAttribute('aria-label') !== pipLabel) {
+        ui.pip.setAttribute('aria-label', pipLabel);
+        ui.pip.title = pipLabel;
+      }
+    }
+    // Offered while the recording is still near its start; listening on past that saves a new position.
+    const resumeAt = el ? savedPosition(el) : 0;
+    const offer = resumeAt >= RESUME_MIN_S && el.currentTime < RESUME_MIN_S && Math.abs(el.currentTime - resumeAt) > 10;
+    if (offer) setText(ui.resume, 'Resume at ' + clock(resumeAt));
+    if (ui.resume.hidden === offer) {
+      ui.resume.hidden = !offer;
+      // The panel just got taller or shorter; keep it on screen.
+      if (desired) placeAt(desired.x, desired.y);
+    }
     setText(ui.readout, formatRate(rate));
     setText(ui.pillRate, formatRate(rate));
     ui.presets.forEach(({ node, value }) => {
@@ -1094,6 +1204,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     } catch (err) {
       showNote('This player doesn’t allow skipping.');
     }
+    scheduleRefresh();
+  }
+
+  function resume() {
+    const el = target;
+    const at = el ? savedPosition(el) : 0;
+    if (!at) return;
+    try {
+      el.currentTime = at;
+    } catch (err) {
+      showNote('This player doesn’t allow skipping.');
+      return;
+    }
+    if (el.paused) togglePlay();
+    else scheduleRefresh();
+  }
+
+  function togglePip() {
+    const el = target;
+    if (!el || el.localName !== 'video') return;
+    const doc = el.ownerDocument;
+    let result = null;
+    try {
+      if (doc.pictureInPictureElement === el) {
+        result = doc.exitPictureInPicture();
+      } else {
+        // Some sites switch the browser's own picture-in-picture off; here the user asked for it.
+        el.disablePictureInPicture = false;
+        result = el.requestPictureInPicture();
+      }
+    } catch (err) {
+      result = Promise.reject(err);
+    }
+    Promise.resolve(result).catch(() => {
+      showNote(
+        el.readyState < 1 ? 'This video hasn’t loaded yet.' : 'The browser didn’t allow picture-in-picture here.'
+      );
+    });
     scheduleRefresh();
   }
 
@@ -1322,8 +1470,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     mediaList.forEach((el) => {
       noteDuration(el);
       applyRate(el);
+      if (!el.paused) notePosition(el, false);
     });
     render();
+  }
+
+  // Leaving or hiding the page saves every position now, since the next tick may never come.
+  function savePositions() {
+    mediaList.forEach((el) => notePosition(el, true));
   }
 
   function scheduleRefresh() {
@@ -1356,6 +1510,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     locked.forEach((undo) => safely(undo));
     locked.clear();
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('pagehide', savePositions);
+    document.removeEventListener('visibilitychange', savePositions);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
     document.removeEventListener('close', onTopLayerChange, true);
@@ -1379,6 +1535,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   window[NS] = api;
 
   window.addEventListener('resize', onResize);
+  window.addEventListener('pagehide', savePositions);
+  document.addEventListener('visibilitychange', savePositions);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   document.addEventListener('close', onTopLayerChange, true);

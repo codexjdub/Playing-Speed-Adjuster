@@ -151,6 +151,12 @@
     <button type="button" popovertarget="pagepop">Open the popover</button>
     <div id="pagepop" popover>This popover covers the page. <button type="button" popovertarget="pagepop" popovertargetaction="hide">Close</button></div>
   </section>
+
+  <section>
+    <h2>15. Long episode</h2>
+    <p>Four minutes long, so PSA remembers where it was left and offers to resume there.</p>
+    <audio id="long" controls data-tone="415" data-seconds="240" data-expect="15. Long episode"></audio>
+  </section>
 </main>
 
 <script>
@@ -175,7 +181,7 @@
   }
 
   document.querySelectorAll('[data-tone]').forEach((el) => {
-    if (el.localName === 'audio' || el.localName === 'video') el.src = beepUrl(Number(el.dataset.tone), 60);
+    if (el.localName === 'audio' || el.localName === 'video') el.src = beepUrl(Number(el.dataset.tone), Number(el.dataset.seconds) || 60);
   });
 
   // 4. Stubborn player
@@ -309,6 +315,7 @@
   // A player's state, for check details.
   const stateOf = (el) => !el ? 'none' : (el.dataset.expect || el.localName) + ' (' + (el.paused ? 'paused' : 'playing') +
     (el.ended ? ', ended' : '') + ', at ' + el.currentTime.toFixed(1) + ' s, ready ' + el.readyState + (el.isConnected ? '' : ', off-page') + ')';
+  const mmss = (seconds) => Math.floor(seconds / 60) + ':' + String(Math.floor(seconds % 60)).padStart(2, '0');
   const until = async (test, ms) => {
     for (const end = Date.now() + ms; !test() && Date.now() < end; ) await wait(100);
   };
@@ -421,7 +428,7 @@
       // The real time left at the player's speed; nothing extra at 1×.
       const subText = panel.querySelector('.sub').textContent;
       const left = Math.floor((first.duration - first.currentTime) / first.playbackRate);
-      const expectLeft = Math.abs(first.playbackRate - 1) < 0.005 ? '' : Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' left';
+      const expectLeft = Math.abs(first.playbackRate - 1) < 0.005 ? '' : mmss(left) + ' left';
       check(expectLeft ? subText.includes(expectLeft) : !subText.includes('left'), 'time left at the current speed' + (expectLeft ? ': ' + expectLeft : ''),
         '"' + subText + '"');
       back.click();
@@ -435,6 +442,38 @@
       back.click();
       await wait(100);
       check(first.currentTime < 0.5, 'skip back stops at the start', 'at ' + first.currentTime.toFixed(1) + ' s');
+
+      progress('picture-in-picture');
+      // Only videos with a picture get the button, and only where the browser has picture-in-picture.
+      // The test videos play sound only, so this one pretends to have a picture, and the browser's own
+      // request is swapped for a stand-in: the check doesn't depend on a real floating window.
+      const pip = panel.querySelector('.pip');
+      check(pip.hidden, 'no picture-in-picture button for audio');
+      const titled = document.querySelector('video[title="Video with its own title"]');
+      progress('titled video: ' + (await startPlaying(titled)));
+      await wait(700);
+      check(pip.hidden, 'no picture-in-picture button for a video without a picture');
+      Object.defineProperty(titled, 'videoWidth', { configurable: true, get: () => 160 });
+      await wait(700);
+      if (document.pictureInPictureEnabled) {
+        const realRequest = HTMLVideoElement.prototype.requestPictureInPicture;
+        let asked = null;
+        HTMLVideoElement.prototype.requestPictureInPicture = function () {
+          asked = this;
+          return Promise.resolve();
+        };
+        titled.disablePictureInPicture = true;
+        pip.click();
+        HTMLVideoElement.prototype.requestPictureInPicture = realRequest;
+        check(!pip.hidden && asked === titled && !titled.disablePictureInPicture,
+          'the picture-in-picture button asks for it, even where the page switched it off',
+          (pip.hidden ? 'button hidden' : 'button shown') + ', ' + (asked === titled ? 'asked' : 'not asked'));
+      } else {
+        check(pip.hidden, 'no picture-in-picture button where the browser has none');
+        skip('the picture-in-picture button asks for it', 'this browser has no picture-in-picture');
+      }
+      delete titled.videoWidth;
+      titled.pause();
 
       // The live stream is left at 1× and labelled as live.
       progress('live stream: ' + (await startPlaying(live)));
@@ -547,6 +586,40 @@
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ']', metaKey: true, bubbles: true, cancelable: true }));
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys with ⌘ are left to the browser', 'rate ' + ctl.inspect().rate);
       document.removeEventListener('keydown', countKeys);
+
+      progress('resume');
+      // Where a long recording was left is saved, and offered again when it plays from near the start.
+      const long = document.getElementById('long');
+      const resumeButton = () => document.querySelector('speed-ctl').shadowRoot.querySelector('.resume');
+      const resumeKey = location.pathname + location.search + ' ' + Math.round(long.duration);
+      const storedAt = () => (JSON.parse(localStorage.getItem('speedCtl.resume.v1') || '{}')[resumeKey] || [])[0];
+      everyMedia().forEach((el) => el.pause());
+      long.currentTime = 100;
+      progress('long episode: ' + (await startPlaying(long)));
+      await wait(300);
+      long.pause();
+      await wait(100);
+      const savedAt = storedAt();
+      check(Math.abs(savedAt - 100) <= 2, 'position saved on pause', resumeKey + ' → ' + savedAt);
+      long.currentTime = 0;
+      progress('long episode from the start: ' + (await startPlaying(long)));
+      await wait(700);
+      check(!resumeButton().hidden && resumeButton().textContent === 'Resume at ' + mmss(savedAt), 'resume offered near the start',
+        resumeButton().hidden ? 'hidden' : '"' + resumeButton().textContent + '"');
+      resumeButton().click();
+      await wait(300);
+      check(Math.abs(long.currentTime - savedAt) < 2 && !long.paused && resumeButton().hidden, 'resume jumps back and plays',
+        'at ' + long.currentTime.toFixed(1) + ' s');
+      long.pause();
+      // Reopening PSA, as on a later visit, offers it again.
+      window.__speedCtl.destroy();
+      long.currentTime = 0;
+      document.getElementById('load').click();
+      await until(() => window.__speedCtl, 3000);
+      progress('long episode after reopening PSA: ' + (await startPlaying(long)));
+      await wait(700);
+      check(!!window.__speedCtl && !resumeButton().hidden, 'resume offered after reopening PSA',
+        resumeButton().hidden ? 'hidden' : '"' + resumeButton().textContent + '"');
     } catch (err) {
       check(false, 'the checks stopped with an error', String((err && err.message) || err));
     }

@@ -202,11 +202,11 @@
       <h2>What it does</h2>
       <div class="grid">
         <div class="card"><h3>Any speed</h3><p>0.25× to 4×: presets, ± steps, a typed value like 1.6, or the keys <kbd>[</kbd> <kbd>]</kbd> and <kbd>\</kbd> for 1.5×.</p></div>
-        <div class="card"><h3>Stays put</h3><p>Remembers your speed on each site and puts it back when the site tries to reset it.</p></div>
+        <div class="card"><h3>Stays put</h3><p>Remembers your speed on each site and puts it back when the site tries to reset it. It also remembers where you left off in long recordings.</p></div>
         <div class="card"><h3>Every player</h3><p>Works with several players on one page, including ones added later. ‹ › switches between them and outlines the one you picked.</p></div>
-        <div class="card"><h3>Knows what's playing</h3><p>Shows a title, Play/Pause, −10 s / +20 s skips and the real time left at your speed for the item that most recently started.</p></div>
+        <div class="card"><h3>Knows what's playing</h3><p>Shows a title, Play/Pause, −10 s / +20 s skips and the real time left at your speed for the item that most recently started. Videos get a picture-in-picture button.</p></div>
         <div class="card"><h3>Out of the way</h3><p>Drag the panel anywhere, or minimize it to a small pill that shows the speed. It stays on top, even over fullscreen video and the page's pop-ups, until you close it.</p></div>
-        <div class="card"><h3>Private</h3><p>Runs only when you click it and makes no network requests. Settings stay in your browser.</p></div>
+        <div class="card"><h3>Private</h3><p>Runs only when you click it and makes no network requests. Settings and positions stay in your browser.</p></div>
       </div>
     </section>
 
@@ -217,6 +217,8 @@
         <li>Keyboard shortcuts while the panel is open, even minimized: <kbd>[</kbd> slows down by 0.1, <kbd>]</kbd> speeds up by 0.1, <kbd>\</kbd> sets 1.5×. They're ignored while you type in a text field, and ⌘ or Ctrl combinations are left to the browser.</li>
         <li>Live streams, such as live radio, stay at normal speed: they can't run ahead of the broadcast, so speeding them up would only make them buffer. The panel shows “Live · normal speed”.</li>
         <li>The speed is saved per site in that site's local storage, so clearing the site's data resets it.</li>
+        <li>Where you left off is saved for recordings longer than 3 minutes, but only while the panel is open. Play one again from the start and the panel offers <strong>Resume at …</strong>.</li>
+        <li>Firefox shows its own picture-in-picture button on videos, so PSA doesn't add one there.</li>
         <li>Works in Chrome, Edge, Firefox and Safari. Every change is tested automatically in all three browser engines (Chromium, Firefox and WebKit); please <a href="https://github.com/codexjdub/Playing-Speed-Adjuster/issues">report problems on GitHub</a>.</li>
       </ul>
     </section>
