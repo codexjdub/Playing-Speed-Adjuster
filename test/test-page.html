@@ -28,6 +28,9 @@
   .toolbar input { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; padding: 10px 0; background: var(--bg); z-index: 1; }
   #fsbox { padding: 12px; border-radius: 8px; background: var(--bg); }
+  #modal { width: min(460px, 90vw); border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); }
+  #modal form { margin-top: 10px; }
+  #pagepop { width: 100%; height: 100%; margin: 0; padding: 24px; border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; }
   #results { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
   .pass { color: var(--pass); } .fail { color: var(--fail); } .skip { color: var(--muted); }
   .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
@@ -130,6 +133,23 @@
     <h2>12. Growing live stream (simulated)</h2>
     <p>Like RTHK live radio: the duration is a number that keeps growing instead of being Infinity. Here it grows 0.4 s every 0.4 s, steps too small to notice one at a time. It should drop back to 1×.</p>
     <audio id="growing" controls data-tone="494" data-expect="12. Growing live stream (simulated)"></audio>
+  </section>
+
+  <section>
+    <h2>13. Video in a modal dialog</h2>
+    <p>While the dialog is open, the panel should stay on top of it and clickable.</p>
+    <button type="button" onclick="document.getElementById('modal').showModal()">Open the dialog</button>
+    <dialog id="modal">
+      <video controls title="Video in a modal dialog" data-tone="466" data-expect="Video in a modal dialog"></video>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
+  </section>
+
+  <section>
+    <h2>14. Popover over the whole page</h2>
+    <p>The panel should stay on top of a popover the page opens after it.</p>
+    <button type="button" popovertarget="pagepop">Open the popover</button>
+    <div id="pagepop" popover>This popover covers the page. <button type="button" popovertarget="pagepop" popovertargetaction="hide">Close</button></div>
   </section>
 </main>
 
@@ -398,6 +418,12 @@
       const panel = document.querySelector('speed-ctl').shadowRoot;
       const back = panel.querySelector('[aria-label="Back 10 seconds"]');
       const ahead = panel.querySelector('[aria-label="Forward 20 seconds"]');
+      // The real time left at the player's speed; nothing extra at 1×.
+      const subText = panel.querySelector('.sub').textContent;
+      const left = Math.floor((first.duration - first.currentTime) / first.playbackRate);
+      const expectLeft = Math.abs(first.playbackRate - 1) < 0.005 ? '' : Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + ' left';
+      check(expectLeft ? subText.includes(expectLeft) : !subText.includes('left'), 'time left at the current speed' + (expectLeft ? ': ' + expectLeft : ''),
+        '"' + subText + '"');
       back.click();
       await wait(100);
       check(Math.abs(first.currentTime - 20) < 0.5, 'skip back 10 s', 'at ' + first.currentTime.toFixed(1) + ' s');
@@ -440,6 +466,29 @@
       check(!!chosenBox && glowBox.left <= chosenBox.left && glowBox.right >= chosenBox.right, 'outline surrounds the chosen player');
       await wait(2000);
       check(glow.hidden, 'outline goes away');
+
+      progress('pop-ups');
+      // The page's own dialogs and popovers open above the panel; it should come back on top, clickable.
+      const hostNow = () => document.querySelector('speed-ctl');
+      const onTop = () => {
+        const r = hostNow().getBoundingClientRect();
+        return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === hostNow();
+      };
+      const modal = document.getElementById('modal');
+      modal.showModal();
+      await wait(700);
+      const inDialog = modal.contains(hostNow());
+      const shown = onTop();
+      check(inDialog && shown, 'the panel stays on top of a modal dialog and clickable',
+        inDialog ? (shown ? '' : 'inside the dialog but covered') : 'not inside the dialog');
+      modal.close();
+      await wait(300);
+      check(hostNow().parentNode === document.documentElement && onTop(), 'the panel leaves the dialog when it closes');
+      const pagePopover = document.getElementById('pagepop');
+      pagePopover.showPopover();
+      await wait(700);
+      check(onTop(), 'the panel stays on top of a popover the page opens');
+      pagePopover.hidePopover();
 
       progress('minimize');
       // Minimize to the pill and back; the state is remembered. Another tab on this site has meanwhile

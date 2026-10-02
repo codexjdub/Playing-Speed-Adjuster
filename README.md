@@ -8,9 +8,9 @@ PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` a
 - Applies the speed to **every** audio and video element on the page, including ones added later, ones inside open shadow roots and same-origin iframes, and off-page `new Audio()` players.
 - Remembers the speed (and panel position) per site in `localStorage`.
 - Keeps re-applying the speed so sites that reset `playbackRate` don't win.
-- Play/Pause, −10 s / +20 s skips and a best-effort title for the active item (the one that most recently started playing). Use ‹ › to pick another item; the one you pick is outlined on the page, and scrolled into view if needed.
+- Play/Pause, −10 s / +20 s skips, a best-effort title and the real time left at your speed for the active item (the one that most recently started playing). Use ‹ › to pick another item; the one you pick is outlined on the page, and scrolled into view if needed.
 - Live streams (live radio, anything without an end) stay at normal speed, since speeding them up only causes buffering.
-- Drag the panel by its top bar, or minimize it to a small pill that shows the speed (remembered per site). It stays open until you click × or run the bookmarklet again.
+- Drag the panel by its top bar, or minimize it to a small pill that shows the speed (remembered per site). It stays open until you click × or run the bookmarklet again, and stays on top of fullscreen video and the page's own dialogs and popovers.
 
 ## Install
 
@@ -52,13 +52,13 @@ Bookmarklets don't update themselves. The panel shows its version next to "PSA",
   5. The page title.
 
   With a single player on the page, Media Session is tried before nearby text.
-- **Isolation.** The panel lives in a shadow root on a `popover="manual"` host, so it sits in the top layer above page content and is re-shown above a fullscreen element when fullscreen starts. The UI is built with DOM calls only (no `innerHTML`), so Trusted Types pages like YouTube don't block it. Styles use a constructed stylesheet, which a `style-src` CSP doesn't block. Keystrokes and clicks inside the panel don't reach the page, so typing a speed doesn't trigger site shortcuts. Clicking panel buttons doesn't take keyboard focus from the page.
+- **Isolation.** The panel lives in a shadow root on a `popover="manual"` host, so it sits in the top layer above page content. It is re-shown on top when fullscreen starts or the page opens its own dialog or popover, and while a modal dialog is open it moves inside it, since a modal dialog makes everything outside it unclickable. The UI is built with DOM calls only (no `innerHTML`), so Trusted Types pages like YouTube don't block it. Styles use a constructed stylesheet, which a `style-src` CSP doesn't block. Keystrokes and clicks inside the panel don't reach the page, so typing a speed doesn't trigger site shortcuts. Clicking panel buttons doesn't take keyboard focus from the page.
 
 ## Limits
 
 - Media inside **cross-site iframes** (e.g. a YouTube embed on a blog) can't be reached. Open the embed's own page and run the bookmarklet there.
 - Closed shadow roots and players that use only the Web Audio API have no reachable media element.
-- In browsers without the Popover API, the panel can't show over a bare fullscreen `<video>`.
+- In browsers without the Popover API, the panel can't show over a bare fullscreen `<video>` or the page's own dialogs.
 
 ## Development
 
@@ -72,7 +72,7 @@ npm test
 
 `npm ci` installs the development tools (Node 20+): terser for the build and Playwright for the tests. Neither goes into the bookmarklet.
 
-`npm test` opens the test page in headless Chrome, using your installed copy so nothing extra is downloaded. It runs the page's checks and clicks the real bookmarklet link on the install page. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, live streams, and a text field inside a closed shadow root; it also checks the skip buttons, the speed box, minimizing, the outline and the keyboard shortcuts. The runner also checks that the test server serves only the site's files.
+`npm test` opens the test page in headless Chrome, using your installed copy so nothing extra is downloaded. It runs the page's checks and clicks the real bookmarklet link on the install page. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, live streams, a text field inside a closed shadow root, a modal dialog and a popover over the whole page; it also checks the skip buttons, the time left, the speed box, minimizing, the outline and the keyboard shortcuts. The runner also checks that the test server serves only the site's files.
 
 To try things by hand, run `npm run serve`, open http://127.0.0.1:8765/test/test-page.html, click **Load PSA**, pick a speed other than 1×, and click **Run checks**.
 

@@ -19,7 +19,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.2.3';
+  const VERSION = '1.3.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -996,6 +996,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       const at = clock(el.currentTime);
       const total = clock(el.duration);
       if (at) parts.push(total ? at + ' / ' + total : at);
+      // Real time left at the player's speed; at 1× it would only repeat the numbers above.
+      const speed = el.playbackRate;
+      if (total && !el.ended && speed > 0 && !sameRate(speed, 1)) {
+        parts.push(clock((el.duration - el.currentTime) / speed) + ' left');
+      }
     }
     if (locked.has(el)) parts.push('speed locked');
     return parts.join(' · ');
@@ -1012,11 +1017,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       const title = titleOf(el);
       setText(ui.title, title);
       if (ui.title.title !== title) ui.title.title = title;
-      setText(ui.sub, statusOf(el));
+      const status = statusOf(el);
+      setText(ui.sub, status);
+      // The line is cut short when it doesn't fit; hovering shows all of it.
+      if (ui.sub.title !== status) ui.sub.title = status;
     } else {
       setText(ui.title, 'No audio or video found yet');
       ui.title.title = '';
       setText(ui.sub, 'Waiting for the page to add a player…');
+      ui.sub.title = '';
     }
     const playing = !!el && !el.paused && !el.ended;
     ui.play.disabled = !el || (el.paused && !hasSource(el));
@@ -1256,15 +1265,47 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     }
   }
 
+  // What the page shows in the top layer of this document (iframes have their own), shadow roots included.
+  function pageTopLayer() {
+    const found = [];
+    roots.forEach((undo, root) => {
+      if ((root.nodeType === 9 ? root : root.host.ownerDocument) !== document) return;
+      safely(() => root.querySelectorAll('dialog:modal, :popover-open').forEach((el) => el !== host && found.push(el)));
+    });
+    return found;
+  }
+
+  let covers = [];
+
   function mount() {
     let parent = document.documentElement;
     const fs = fullscreenElement();
     // Without popover support, a fullscreen container can only show the panel from inside it.
     // A bare <video> can't hold children, so there the panel stays hidden until fullscreen ends.
     if (!canPopover && fs && !isMedia(fs) && fs.localName !== 'iframe') parent = fs;
+    let raise = false;
+    if (canPopover) {
+      const cover = pageTopLayer();
+      // A modal dialog makes everything outside it unclickable, so while one is open the panel moves
+      // inside it. As a popover it still shows above the dialog, at the same place.
+      const modal = cover.filter((el) => el.localName === 'dialog' && el.matches(':modal')).pop();
+      if (modal) parent = modal;
+      // A dialog or popover the page opens later sits above the panel; re-showing puts the panel back on top.
+      raise = cover.some((el) => covers.indexOf(el) === -1);
+      covers = cover;
+    }
     if (!parent) return;
+    // Moving the host also hides the popover, so it is shown again below.
     if (host.parentNode !== parent) parent.append(host);
-    if (canPopover && !isPopoverOpen()) safely(() => host.showPopover());
+    if (!canPopover) return;
+    if (raise && isPopoverOpen()) safely(() => host.hidePopover());
+    if (!isPopoverOpen()) safely(() => host.showPopover());
+  }
+
+  // Dialogs and popovers report closing and opening ("close" and "toggle" don't bubble, but capture sees
+  // them), so the panel follows straight away instead of on the next tick.
+  function onTopLayerChange() {
+    if (alive) mount();
   }
 
   function onFullscreenChange() {
@@ -1317,6 +1358,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     window.removeEventListener('resize', onResize);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.removeEventListener('close', onTopLayerChange, true);
+    document.removeEventListener('toggle', onTopLayerChange, true);
     if (canPopover) safely(() => host.hidePopover());
     host.remove();
     if (window[NS] === api) delete window[NS];
@@ -1338,6 +1381,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   window.addEventListener('resize', onResize);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+  document.addEventListener('close', onTopLayerChange, true);
+  document.addEventListener('toggle', onTopLayerChange, true);
 
   tick();
   const start = saved.pos;
