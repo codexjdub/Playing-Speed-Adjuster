@@ -19,7 +19,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.2.2';
+  const VERSION = '1.2.3';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -36,6 +36,8 @@
   const FIGHT_LIMIT = 8;
   const FIGHT_WINDOW_MS = 2000;
   const TITLE_TTL_MS = 2000;
+  // A duration that grows counts as a sign of a live stream at most this often.
+  const GROWTH_GAP_MS = 1500;
   const STORE_KEY = 'speedCtl.v1';
   const MEDIA_EVENTS = [
     'play',
@@ -52,18 +54,23 @@
   // ---- Per-site storage -------------------------------------------------------------------------
   // localStorage is already scoped to the site's origin. Blocked storage falls back to memory.
 
-  let saved = {};
-  try {
-    saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
-  } catch (err) {
-    saved = {};
+  function load() {
+    try {
+      const value = JSON.parse(localStorage.getItem(STORE_KEY));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch (err) {
+      return {};
+    }
   }
-  if (typeof saved !== 'object') saved = {};
+
+  const saved = load();
 
   function save(key, value) {
-    saved[key] = value;
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(saved));
+      // Merge into what is stored now, so another tab on this site keeps its latest settings.
+      const latest = load();
+      latest[key] = value;
+      localStorage.setItem(STORE_KEY, JSON.stringify(latest));
     } catch (err) {
       // Storage is blocked or full: the value lasts for this visit only.
     }
@@ -127,16 +134,24 @@
   const isLive = (el) =>
     isStream(el) || el.duration === Infinity || (growth.get(el) || { increases: 0 }).increases >= 2;
 
+  // Growth is measured from the last point that counted, so small steps add up, and counts at most once
+  // per GROWTH_GAP_MS, so a burst of corrections to a file's estimated length while it loads counts once.
+  // A live duration never shrinks, so a shrink starts over.
   function noteDuration(el) {
     const duration = el.duration;
     if (!isFinite(duration)) return;
+    const now = Date.now();
     const seen = growth.get(el);
-    if (!seen) {
-      growth.set(el, { duration, increases: 0 });
+    if (!seen || duration < seen.last) {
+      growth.set(el, { from: duration, at: now, last: duration, increases: 0 });
       return;
     }
-    if (duration > seen.duration + 0.5) seen.increases += 1;
-    seen.duration = duration;
+    seen.last = duration;
+    if (duration > seen.from + 0.5 && now - seen.at >= GROWTH_GAP_MS) {
+      seen.increases += 1;
+      seen.from = duration;
+      seen.at = now;
+    }
   }
 
   function applyRate(el) {
@@ -297,7 +312,12 @@
       }
       return original.apply(this, arguments);
     };
-    proto.play = play;
+    try {
+      proto.play = play;
+    } catch (err) {
+      // The page made play() read-only; only media in the page can be found.
+      return null;
+    }
     return () => {
       // If another script wrapped play() after us, our wrapper stays in its chain as a pass-through.
       active = false;
@@ -319,11 +339,18 @@
     });
   }
 
-  // Typing into a text field (the page's or the panel's own) never triggers a shortcut.
+  const FOCUSABLE =
+    'a[href], area[href], button, iframe, summary, dialog, audio[controls], video[controls], [tabindex], [contenteditable]';
+
+  // Typing into a text field (the page's or the panel's own) never triggers a shortcut. Focus inside a
+  // closed shadow root shows up as its host, which can't take focus itself. What has focus in there
+  // can't be seen, and it may be a text field, so that counts as typing too.
   function isTyping(event) {
     const node = typeof event.composedPath === 'function' ? event.composedPath()[0] : event.target;
     if (!node || node.nodeType !== 1) return false;
-    return !!node.isContentEditable || /^(input|textarea|select)$/i.test(node.localName);
+    if (node.isContentEditable || /^(input|textarea|select)$/i.test(node.localName)) return true;
+    const doc = node.ownerDocument;
+    return node !== doc.body && node !== doc.documentElement && !node.matches(FOCUSABLE);
   }
 
   function onKey(event) {
@@ -391,9 +418,12 @@
         // A root from a navigated-away iframe; the next deep scan drops it.
       }
     });
+    // Off-page media is dropped once it stops, or one-off sounds would pile up. The exception is a paused
+    // one the panel is showing, so its Play button can resume it.
     Array.from(known).forEach((el) => {
       if (inList.has(el)) return;
-      if (el.isConnected || !el.paused) add(el);
+      const resumable = el === target && watched.has(el) && !el.ended;
+      if (el.isConnected || !el.paused || resumable) add(el);
       else forget(el);
     });
     list.forEach((el) => known.add(el));
@@ -401,6 +431,13 @@
       if (roots.has(el.getRootNode())) {
         safely(undo);
         watched.delete(el);
+      }
+    });
+    // A player that has left the page no longer needs its lock, which would also keep it in memory.
+    locked.forEach((undo, el) => {
+      if (!inList.has(el)) {
+        safely(undo);
+        locked.delete(el);
       }
     });
     return list;
@@ -885,8 +922,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     (type) => shadow.addEventListener(type, (event) => event.stopPropagation())
   );
   // Clicking a button shouldn't move keyboard focus off the page, so page shortcuts keep working.
+  // Focus then stays in an open speed box too, so it would never close: save what was typed first,
+  // and the button acts after that.
   ui.panel.addEventListener('mousedown', (event) => {
-    if (event.target.closest && event.target.closest('button')) event.preventDefault();
+    if (!event.target.closest || !event.target.closest('button')) return;
+    event.preventDefault();
+    closeEntry(true);
   });
 
   function showNote(text) {

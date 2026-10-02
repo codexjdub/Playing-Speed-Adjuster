@@ -20,11 +20,11 @@ jobs:
       - name: Install build tools
         run: npm ci
       - name: Rebuild from src/
-        run: node build.mjs
+        run: npm run build
       - name: Check the committed build is up to date
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             git status --short
-            echo "::error::dist/ or index.html is out of date. Run node build.mjs and commit the result."
+            echo "::error::dist/ or index.html is out of date. Run npm run build and commit the result."
             exit 1
           fi

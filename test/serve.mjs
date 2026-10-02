@@ -7,23 +7,37 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const port = Number(process.env.PORT) || 8765;
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
+const types = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+};
+// Only the site's own files. The rest of the repo (.git, local notes, node_modules) stays private.
+const isServed = (file) =>
+  (file === 'index.html' || /^(dist|docs|test)[/\\]/.test(file)) && !file.split(/[/\\]/).some((part) => part.startsWith('.'));
 
 createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
-  if (path.startsWith('..')) {
-    res.writeHead(403).end();
+  let path = '';
+  try {
+    path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '');
+  } catch (err) {
+    res.writeHead(400, { 'content-type': 'text/plain' }).end('Bad request');
     return;
   }
+  // The type comes from the file actually served, so "/" is sent as HTML rather than as a download.
+  const file = path || 'index.html';
   try {
-    // The type comes from the file actually served, so "/" is sent as HTML rather than as a download.
-    const file = path || 'index.html';
+    if (!isServed(file)) throw new Error('not served');
     const body = await readFile(join(root, file));
-    // CORS lets a page on another site fetch dist/psa.min.js while testing.
     res.writeHead(200, {
       'content-type': types[extname(file)] || 'application/octet-stream',
       'cache-control': 'no-store',
-      'access-control-allow-origin': '*',
+      // CORS lets a page on another site fetch dist/psa.min.js while testing.
+      ...(/^dist[/\\]/.test(file) ? { 'access-control-allow-origin': '*' } : {}),
     });
     res.end(body);
   } catch (err) {

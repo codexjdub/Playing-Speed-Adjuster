@@ -24,7 +24,8 @@
   .row p { margin: 0; color: var(--fg); }
   iframe { width: 100%; height: 150px; border: 1px dashed var(--line); border-radius: 8px; }
   button { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; cursor: pointer; }
-  .toolbar input { flex: 1 1 240px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
+  .toolbar input, closed-field { flex: 1 1 240px; }
+  .toolbar input { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; padding: 10px 0; background: var(--bg); z-index: 1; }
   #fsbox { padding: 12px; border-radius: 8px; background: var(--bg); }
   #results { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
@@ -45,6 +46,7 @@
     <button id="rerender" type="button">Remove panel (simulate re-render)</button>
     <button id="stopall" type="button">Pause everything</button>
     <input id="typing" type="text" placeholder="Typing [ ] \ here must not change the speed" aria-label="Text box for the typing check">
+    <closed-field></closed-field>
   </div>
   <div id="results" aria-live="polite"></div>
 
@@ -126,7 +128,7 @@
 
   <section>
     <h2>12. Growing live stream (simulated)</h2>
-    <p>Like RTHK live radio: the duration is a number that grows by 10 s every second instead of being Infinity. It should drop back to 1×.</p>
+    <p>Like RTHK live radio: the duration is a number that keeps growing instead of being Infinity. Here it grows 0.4 s every 0.4 s, steps too small to notice one at a time. It should drop back to 1×.</p>
     <audio id="growing" controls data-tone="494" data-expect="12. Growing live stream (simulated)"></audio>
   </section>
 </main>
@@ -238,14 +240,29 @@
     live.replaceWith(document.createTextNode('This browser cannot make a MediaStream: ' + err.message));
   }
 
-  // 12. Growing live stream: fake the duration that chunked live players report.
+  // 12. Growing live stream: fake the duration that chunked live players report, in small steps.
   const growing = document.getElementById('growing');
   let grownTo = 30;
   Object.defineProperty(growing, 'duration', { configurable: true, get: () => grownTo });
   setInterval(() => {
-    grownTo += 10;
+    grownTo += 0.4;
     growing.dispatchEvent(new Event('durationchange'));
-  }, 1000);
+  }, 400);
+
+  // A text field in a closed shadow root: key events from it reach the page as if from <closed-field>.
+  let closedInput = null;
+  customElements.define('closed-field', class extends HTMLElement {
+    connectedCallback() {
+      if (closedInput) return;
+      const root = this.attachShadow({ mode: 'closed' });
+      const style = document.createElement('style');
+      style.textContent = 'input { box-sizing: border-box; width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }';
+      closedInput = document.createElement('input');
+      closedInput.placeholder = 'Or here, inside a closed shadow root';
+      closedInput.setAttribute('aria-label', 'Text box in a closed shadow root');
+      root.append(style, closedInput);
+    }
+  });
 
   // ---- Toolbar ----
   document.getElementById('load').addEventListener('click', () => {
@@ -269,6 +286,9 @@
   // ---- Checks: assert what PSA reports against what the page expects ----
   const results = document.getElementById('results');
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const until = async (test, ms) => {
+    for (const end = Date.now() + ms; !test() && Date.now() < end; ) await wait(100);
+  };
   // A play() that neither starts nor fails would hang the checks, so give up after a few seconds.
   const startPlaying = (el, ms = 4000) =>
     Promise.race([
@@ -302,11 +322,21 @@
       const offEntry = ctl.inspect().media.find((m) => m.el === offPage);
       check(!!offEntry && offEntry.title === 'Off-page tone', 'title: Off-page tone (Media Session)',
         offEntry ? 'got "' + offEntry.title + '"' : 'not found');
+      // Pausing it from the panel keeps it there, so the panel can resume it.
+      const playButton = document.querySelector('speed-ctl').shadowRoot.querySelector('.play');
+      playButton.click();
+      await wait(700);
+      check(offPage.paused && ctl.inspect().target === offPage, 'paused off-page audio stays in the panel');
+      playButton.click();
+      await until(() => !offPage.paused, 3000);
+      check(!offPage.paused, 'the panel resumes off-page audio');
 
       // Start a few more players so the fighting and reload paths are exercised.
       const started = await Promise.all([stubborn, playlist, document.getElementById('late-audio')].filter(Boolean).map((el) => startPlaying(el)));
       progress('started stubborn, playlist and late players: ' + started.join(', '));
       await wait(1500);
+      // The growing stream counts as live once it has grown for a few seconds.
+      await until(() => ctl.inspect().media.some((m) => m.el === growing && m.live), 5000);
 
       const snap = ctl.inspect();
       const rate = snap.rate;
@@ -337,6 +367,14 @@
       document.querySelectorAll('speed-ctl').forEach((node) => node.remove());
       await wait(800);
       check(!!document.querySelector('speed-ctl'), 'panel re-attached after removal');
+
+      // A locked player that leaves the page is unlocked.
+      const stubbornSection = stubborn.parentNode;
+      stubborn.pause();
+      stubborn.remove();
+      await wait(700);
+      check(!Object.getOwnPropertyDescriptor(stubborn, 'playbackRate'), 'a removed player is unlocked');
+      stubbornSection.append(stubborn);
 
       // Skip buttons act on the active item (the one that most recently started) and stop at its start.
       everyMedia().forEach((el) => el.pause());
@@ -392,18 +430,34 @@
       check(glow.hidden, 'outline goes away');
 
       progress('minimize');
-      // Minimize to the pill and back; the state is remembered.
+      // Minimize to the pill and back; the state is remembered. Another tab on this site has meanwhile
+      // saved a different speed, which saving the minimized state here must not overwrite.
+      localStorage.setItem('speedCtl.v1', JSON.stringify({ ...JSON.parse(localStorage.getItem('speedCtl.v1')), rate: 2.2 }));
       panel.querySelector('[aria-label="Minimize"]').click();
       await wait(100);
       const pill = panel.querySelector('.pill');
       check(!pill.hidden && panel.querySelector('.panel').hidden, 'minimize shows the pill');
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === true, 'minimized state is saved');
+      check(JSON.parse(localStorage.getItem('speedCtl.v1')).rate === 2.2, 'another tab\'s saved speed is kept');
       check(pill.textContent.includes(ctl.inspect().rate.toFixed(2)), 'pill shows the speed', pill.textContent);
       pill.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       pill.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       await wait(100);
       check(pill.hidden && !panel.querySelector('.panel').hidden, 'clicking the pill expands the panel');
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === false, 'expanded state is saved');
+
+      progress('speed box');
+      // A button pressed while the speed box is open: what was typed is saved first, then the button acts.
+      const entry = panel.querySelector('.entry');
+      const preset2 = [...panel.querySelectorAll('.presets button')].find((b) => b.textContent === '2');
+      panel.querySelector('.readout').click();
+      entry.value = '1.6';
+      preset2.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true }));
+      preset2.click();
+      entry.blur();
+      await wait(100);
+      check(Math.abs(ctl.inspect().rate - 2) < 0.005 && entry.hidden, 'a preset clicked while typing a speed wins',
+        'rate ' + ctl.inspect().rate);
 
       progress('keyboard shortcuts');
       // Keyboard shortcuts: [ ] \ change the speed, but not while typing, and the page never sees handled keys.
@@ -424,6 +478,11 @@
       press(']', typing);
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys are ignored while typing', 'rate ' + ctl.inspect().rate);
       typing.blur();
+      closedInput.focus();
+      press(']', closedInput);
+      check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys are ignored while typing in a closed shadow root',
+        'rate ' + ctl.inspect().rate);
+      closedInput.blur();
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ']', metaKey: true, bubbles: true, cancelable: true }));
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys with ⌘ are left to the browser', 'rate ' + ctl.inspect().rate);
       document.removeEventListener('keydown', countKeys);

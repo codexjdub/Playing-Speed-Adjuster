@@ -2,8 +2,9 @@
 //
 //   node test/run-checks.mjs [--browser chromium|firefox|webkit] [--channel chrome]
 //
-// Starts test/serve.mjs, loads PSA on the test page at 1.8×, runs the page's own checks (they stay defined
-// in test-page.html), then clicks the real javascript: link on the install page. Exits with 1 on any failure.
+// Starts test/serve.mjs and checks what it serves, loads PSA on the test page at 1.8×, runs the page's own
+// checks (they stay defined in test-page.html), then clicks the real javascript: link on the install page.
+// Exits with 1 on any failure.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -32,18 +33,13 @@ const server = spawn(process.execPath, ['test/serve.mjs'], {
   env: { ...process.env, PORT: String(port) },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
+// Stop the server however this run ends, including a crash before the checks start.
+process.on('exit', () => server.kill());
 await new Promise((resolve, reject) => {
   server.stdout.on('data', (chunk) => {
     if (String(chunk).includes('Serving on')) resolve();
   });
   server.on('exit', (code) => reject(new Error('The test server exited with code ' + code)));
-});
-
-// The checks start players from script, so let media play without a user gesture.
-const browser = await engines[browserName].launch({
-  channel,
-  args: browserName === 'chromium' ? ['--autoplay-policy=no-user-gesture-required'] : [],
-  firefoxUserPrefs: browserName === 'firefox' ? { 'media.autoplay.default': 0 } : undefined,
 });
 
 const lines = [];
@@ -70,7 +66,26 @@ const diagnose = (page) =>
     }))
     .catch((err) => ({ unavailable: err.message.split('\n')[0] }));
 
+let browser = null;
 try {
+  // 0. The test server: only the site's files are served, and a malformed address doesn't stop it.
+  const status = (path) => fetch(base + path).then((res) => res.status, () => 0);
+  for (const path of ['/.git/HEAD', '/AGENTS.md', '/package.json']) {
+    const code = await status(path);
+    if (code === 404) pass('test server hides ' + path);
+    else fail('test server hides ' + path + ' — got ' + code);
+  }
+  const bad = await status('/%E0%A4%A');
+  const after = await status('/index.html');
+  if (bad === 400 && after === 200) pass('test server answers a malformed address with 400 and keeps running');
+  else fail('test server and a malformed address — got ' + bad + ', then ' + after + ' for /index.html');
+
+  // The checks start players from script, so let media play without a user gesture.
+  browser = await engines[browserName].launch({
+    channel,
+    args: browserName === 'chromium' ? ['--autoplay-policy=no-user-gesture-required'] : [],
+    firefoxUserPrefs: browserName === 'firefox' ? { 'media.autoplay.default': 0 } : undefined,
+  });
   const page = await browser.newPage();
   page.on('pageerror', (err) => fail('uncaught error on ' + page.url() + ': ' + err.message));
   page.on('console', (msg) => {
@@ -106,8 +121,7 @@ try {
 } catch (err) {
   fail('the run stopped: ' + err.message.split('\n')[0]);
 } finally {
-  await browser.close();
-  server.kill();
+  if (browser) await browser.close();
 }
 
 const failed = lines.filter((line) => !line.ok);
