@@ -19,7 +19,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.4.0';
+  const VERSION = '1.4.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -60,25 +60,26 @@
     'enterpictureinpicture',
     'leavepictureinpicture',
   ];
+  const TOP_LAYER_EVENTS = ['toggle', 'close'];
 
   // ---- Per-site storage -------------------------------------------------------------------------
   // localStorage is already scoped to the site's origin. Blocked storage falls back to memory.
 
-  function load() {
+  function load(name) {
     try {
-      const value = JSON.parse(localStorage.getItem(STORE_KEY));
+      const value = JSON.parse(localStorage.getItem(name));
       return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     } catch (err) {
       return {};
     }
   }
 
-  const saved = load();
+  const saved = load(STORE_KEY);
 
   function save(key, value) {
     try {
       // Merge into what is stored now, so another tab on this site keeps its latest settings.
-      const latest = load();
+      const latest = load(STORE_KEY);
       latest[key] = value;
       localStorage.setItem(STORE_KEY, JSON.stringify(latest));
     } catch (err) {
@@ -255,59 +256,119 @@
   }
 
   // ---- Resume positions -------------------------------------------------------------------------
-  // A recording is known by its page and length. Many sites play through a blob: address that changes
-  // on every visit, so the media's own address can't be used.
+  // A recording is known by the page it started playing on and its length. Many sites play through a
+  // blob: address that changes on every visit, so the media's own address can't be used.
 
-  const lastSaved = new WeakMap(); // element -> when its position was last written
+  // Address parameters that only say where a visit came from or where to start playing, so the same
+  // recording is recognised however its page was reached.
+  const NOISE_PARAMS =
+    /^(utm_.*|fbclid|gclid|gbraid|wbraid|dclid|msclkid|mc_cid|mc_eid|igshid|si|feature|ref|ref_src|t|start|time_continue|list|index|pp)$/i;
 
-  function resumeKey(el) {
-    const duration = el.duration;
-    if (!isFinite(duration) || duration < RESUME_MIN_LENGTH_S || isLive(el)) return '';
-    const page = el.ownerDocument.location || location;
-    return page.pathname + page.search + ' ' + Math.round(duration);
+  const pageOf = new WeakMap(); // element -> page its recording started playing on
+  const lastSaved = new WeakMap(); // element -> { time, key } of its last write
+  let positionsCache = null; // the stored positions; dropped when another tab changes them
+
+  // A player in an about:blank or srcdoc frame belongs to the page around it.
+  function pageAddress(el) {
+    let url = null;
+    try {
+      const own = el.ownerDocument.location;
+      url = new URL(own && /^https?:$/.test(own.protocol) ? own.href : location.href);
+    } catch (err) {
+      return location.pathname;
+    }
+    const params = new URLSearchParams();
+    url.searchParams.forEach((value, name) => {
+      if (!NOISE_PARAMS.test(name)) params.append(name, value);
+    });
+    params.sort();
+    const search = params.toString();
+    return url.pathname + (search ? '?' + search : '');
   }
 
-  function loadPositions() {
-    try {
-      const value = JSON.parse(localStorage.getItem(RESUME_KEY));
-      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-    } catch (err) {
-      return {};
-    }
+  // The recording an element plays, or null when it isn't worth remembering.
+  function recordingOf(el) {
+    const duration = el.duration;
+    if (!isFinite(duration) || duration < RESUME_MIN_LENGTH_S || isLive(el)) return null;
+    return { page: pageOf.get(el) || pageAddress(el), duration };
+  }
+
+  // Keys are "page length". A length within 2 s still matches, since players refine it as they load.
+  function findKey(stored, recording) {
+    let best = '';
+    let bestGap = Infinity;
+    Object.keys(stored).forEach((key) => {
+      const cut = key.lastIndexOf(' ');
+      const gap = Math.abs(Number(key.slice(cut + 1)) - recording.duration);
+      if (key.slice(0, cut) === recording.page && gap <= 2 && gap < bestGap) {
+        best = key;
+        bestGap = gap;
+      }
+    });
+    return best;
+  }
+
+  function positions() {
+    if (!positionsCache) positionsCache = load(RESUME_KEY);
+    return positionsCache;
   }
 
   function savedPosition(el) {
-    const key = resumeKey(el);
-    const entry = key ? loadPositions()[key] : null;
+    const recording = recordingOf(el);
+    const key = recording ? findKey(positions(), recording) : '';
+    const entry = key ? positions()[key] : null;
     return Array.isArray(entry) && isFinite(entry[0]) ? entry[0] : 0;
+  }
+
+  // Changes the stored positions, merged into what is stored now so other tabs on this site keep theirs.
+  function writePositions(change) {
+    try {
+      const stored = load(RESUME_KEY);
+      change(stored);
+      const keys = Object.keys(stored);
+      const savedAt = (k) => (Array.isArray(stored[k]) && stored[k][1]) || 0;
+      keys
+        .sort((a, b) => savedAt(a) - savedAt(b))
+        .slice(0, Math.max(0, keys.length - RESUME_KEEP))
+        .forEach((k) => delete stored[k]);
+      localStorage.setItem(RESUME_KEY, JSON.stringify(stored));
+      positionsCache = stored;
+    } catch (err) {
+      // Storage is blocked or full.
+    }
   }
 
   // Every RESUME_SAVE_MS while playing, and at once (`now`) on pause, at the end, or when leaving the page.
   function notePosition(el, now) {
-    const key = resumeKey(el);
-    if (!key) return;
+    const last = lastSaved.get(el);
+    const recording = recordingOf(el);
+    if (!recording) {
+      // A stream found to be live after its position was saved, while its length still looked fixed.
+      if (last && isLive(el)) {
+        lastSaved.delete(el);
+        writePositions((stored) => delete stored[last.key]);
+      }
+      return;
+    }
     const time = Date.now();
-    if (!now && time - (lastSaved.get(el) || 0) < RESUME_SAVE_MS) return;
+    if (!now && last && time - last.time < RESUME_SAVE_MS) return;
     const at = el.currentTime;
-    const finished = el.ended || at > el.duration - RESUME_MIN_S;
+    const finished = el.ended || at > recording.duration - RESUME_MIN_S;
     // Near the start, an older position is kept: it is what the panel offers to go back to.
     if (!finished && at < RESUME_MIN_S) return;
-    lastSaved.set(el, time);
-    try {
-      // Merged into what is stored now, so other tabs on this site keep theirs.
-      const positions = loadPositions();
-      if (finished) delete positions[key];
-      else positions[key] = [Math.floor(at), time];
-      const keys = Object.keys(positions);
-      const savedAt = (k) => (Array.isArray(positions[k]) && positions[k][1]) || 0;
-      keys
-        .sort((a, b) => savedAt(a) - savedAt(b))
-        .slice(0, Math.max(0, keys.length - RESUME_KEEP))
-        .forEach((k) => delete positions[k]);
-      localStorage.setItem(RESUME_KEY, JSON.stringify(positions));
-    } catch (err) {
-      // Storage is blocked or full.
-    }
+    if (!pageOf.has(el)) pageOf.set(el, recording.page);
+    writePositions((stored) => {
+      const key = findKey(stored, recording) || recording.page + ' ' + Math.round(recording.duration);
+      // One entry per element: a length that is still settling doesn't leave older ones behind.
+      if (last && last.key !== key) delete stored[last.key];
+      if (finished) delete stored[key];
+      else stored[key] = [Math.floor(at), time];
+      lastSaved.set(el, { time, key });
+    });
+  }
+
+  function onStorage(event) {
+    if (event.key === RESUME_KEY || event.key === null) positionsCache = null;
   }
 
   // ---- Media discovery --------------------------------------------------------------------------
@@ -326,9 +387,13 @@
     } else if (event.type === 'play') {
       markStarted(el);
       applyRate(el);
+      // Tied to this page even if a single-page site changes its address while it plays.
+      if (!pageOf.has(el)) pageOf.set(el, pageAddress(el));
     } else if (event.type === 'loadstart' || event.type === 'emptied') {
-      // A new source: its duration history no longer applies.
+      // A new source: its duration history and the recording it was no longer apply.
       growth.delete(el);
+      pageOf.delete(el);
+      lastSaved.delete(el);
       applyRate(el);
     } else if (event.type === 'durationchange') {
       noteDuration(el);
@@ -400,8 +465,12 @@
     const unhook = win ? hookPlay(win) : null;
     // Capture on the window runs before the page's own key handlers, so a handled key doesn't reach them.
     if (win) win.addEventListener('keydown', onKey, true);
+    // Dialogs and popovers report closing and opening ("close" and "toggle" don't bubble or leave
+    // shadow roots, but capture on each root sees them), so the panel follows straight away.
+    TOP_LAYER_EVENTS.forEach((type) => root.addEventListener(type, onTopLayerChange, true));
     roots.set(root, () => {
       MEDIA_EVENTS.forEach((type) => root.removeEventListener(type, onMediaEvent, true));
+      TOP_LAYER_EVENTS.forEach((type) => root.removeEventListener(type, onTopLayerChange, true));
       if (unhook) unhook();
       if (win) win.removeEventListener('keydown', onKey, true);
     });
@@ -1056,8 +1125,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   ui.entry.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') closeEntry(true);
-    else if (event.key === 'Escape') closeEntry(false);
+    if (event.key === 'Enter') {
+      closeEntry(true);
+    } else if (event.key === 'Escape') {
+      // Cancelled, so a page dialog the panel sits in doesn't also take it as a request to close.
+      event.preventDefault();
+      closeEntry(false);
+    }
   });
   ui.entry.addEventListener('blur', () => closeEntry(true));
 
@@ -1085,9 +1159,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       if (at) parts.push(total ? at + ' / ' + total : at);
       // Real time left at the player's speed; at 1× it would only repeat the numbers above.
       const speed = el.playbackRate;
-      if (total && !el.ended && speed > 0 && !sameRate(speed, 1)) {
-        parts.push(clock((el.duration - el.currentTime) / speed) + ' left');
-      }
+      const left = speed > 0 ? (el.duration - el.currentTime) / speed : 0;
+      if (total && !el.ended && left > 0 && !sameRate(speed, 1)) parts.push(clock(left) + ' left');
     }
     if (locked.has(el)) parts.push('speed locked');
     return parts.join(' · ');
@@ -1413,19 +1486,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     }
   }
 
-  // What the page shows in the top layer of this document (iframes have their own), shadow roots included.
-  function pageTopLayer() {
+  const TOP_LAYER = 'dialog:modal, :popover-open';
+
+  // What the page shows in the top layer of this document (iframes have their own). Shadow roots are
+  // only searched when `deep`; ones already found are checked directly in between.
+  function pageTopLayer(deep) {
     const found = [];
     roots.forEach((undo, root) => {
-      if ((root.nodeType === 9 ? root : root.host.ownerDocument) !== document) return;
-      safely(() => root.querySelectorAll('dialog:modal, :popover-open').forEach((el) => el !== host && found.push(el)));
+      if (root.nodeType === 9 ? root !== document : !deep || root.host.ownerDocument !== document) return;
+      safely(() => root.querySelectorAll(TOP_LAYER).forEach((el) => el !== host && found.push(el)));
+    });
+    covers.forEach((el) => {
+      if (found.indexOf(el) === -1) safely(() => el.isConnected && el.matches(TOP_LAYER) && found.push(el));
     });
     return found;
   }
 
-  let covers = [];
+  let covers = []; // the page's top-layer elements, in the order they opened
 
-  function mount() {
+  function mount(deep) {
     let parent = document.documentElement;
     const fs = fullscreenElement();
     // Without popover support, a fullscreen container can only show the panel from inside it.
@@ -1433,14 +1512,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!canPopover && fs && !isMedia(fs) && fs.localName !== 'iframe') parent = fs;
     let raise = false;
     if (canPopover) {
-      const cover = pageTopLayer();
-      // A modal dialog makes everything outside it unclickable, so while one is open the panel moves
-      // inside it. As a popover it still shows above the dialog, at the same place.
-      const modal = cover.filter((el) => el.localName === 'dialog' && el.matches(':modal')).pop();
-      if (modal) parent = modal;
+      const open = pageTopLayer(deep);
+      const opened = open.filter((el) => covers.indexOf(el) === -1);
+      covers = covers.filter((el) => open.indexOf(el) !== -1).concat(opened);
       // A dialog or popover the page opens later sits above the panel; re-showing puts the panel back on top.
-      raise = cover.some((el) => covers.indexOf(el) === -1);
-      covers = cover;
+      raise = opened.length > 0;
+      // A modal dialog makes everything outside it unclickable, so while one is open the panel moves inside
+      // the one opened last, which is on top. As a popover it still shows above the dialog, at the same place.
+      const modal = covers.filter((el) => el.localName === 'dialog' && el.matches(':modal')).pop();
+      if (modal) parent = modal;
     }
     if (!parent) return;
     // Moving the host also hides the popover, so it is shown again below.
@@ -1450,10 +1530,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!isPopoverOpen()) safely(() => host.showPopover());
   }
 
-  // Dialogs and popovers report closing and opening ("close" and "toggle" don't bubble, but capture sees
-  // them), so the panel follows straight away instead of on the next tick.
   function onTopLayerChange() {
-    if (alive) mount();
+    if (alive) mount(true);
   }
 
   function onFullscreenChange() {
@@ -1491,9 +1569,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   function tick() {
     if (!alive) return;
-    if (tickCount % DEEP_SCAN_EVERY === 0) discoverRoots();
+    const deep = tickCount % DEEP_SCAN_EVERY === 0;
+    if (deep) discoverRoots();
     tickCount += 1;
-    mount();
+    mount(deep);
     refresh();
   }
 
@@ -1514,8 +1593,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     document.removeEventListener('visibilitychange', savePositions);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
-    document.removeEventListener('close', onTopLayerChange, true);
-    document.removeEventListener('toggle', onTopLayerChange, true);
+    window.removeEventListener('storage', onStorage);
     if (canPopover) safely(() => host.hidePopover());
     host.remove();
     if (window[NS] === api) delete window[NS];
@@ -1539,8 +1617,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   document.addEventListener('visibilitychange', savePositions);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-  document.addEventListener('close', onTopLayerChange, true);
-  document.addEventListener('toggle', onTopLayerChange, true);
+  window.addEventListener('storage', onStorage);
 
   tick();
   const start = saved.pos;

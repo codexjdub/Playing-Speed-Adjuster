@@ -28,8 +28,8 @@
   .toolbar input { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: inherit; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; padding: 10px 0; background: var(--bg); z-index: 1; }
   #fsbox { padding: 12px; border-radius: 8px; background: var(--bg); }
-  #modal { width: min(460px, 90vw); border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); }
-  #modal form { margin-top: 10px; }
+  #modal, #confirm { width: min(460px, 90vw); border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); }
+  #modal form, #confirm form { margin-top: 10px; }
   #pagepop { width: 100%; height: 100%; margin: 0; padding: 24px; border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; }
   #results { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
   .pass { color: var(--pass); } .fail { color: var(--fail); } .skip { color: var(--muted); }
@@ -139,6 +139,10 @@
     <h2>13. Video in a modal dialog</h2>
     <p>While the dialog is open, the panel should stay on top of it and clickable.</p>
     <button type="button" onclick="document.getElementById('modal').showModal()">Open the dialog</button>
+    <dialog id="confirm">
+      <p>A second dialog, opened on top of the first one.</p>
+      <form method="dialog"><button>Close</button></form>
+    </dialog>
     <dialog id="modal">
       <video controls title="Video in a modal dialog" data-tone="466" data-expect="Video in a modal dialog"></video>
       <form method="dialog"><button>Close</button></form>
@@ -219,7 +223,7 @@
   const frame = document.getElementById('frame');
   const fillFrame = () => {
     const audio = frame.contentDocument && frame.contentDocument.querySelector('audio');
-    if (audio && !audio.src) { audio.src = beepUrl(440, 60); audio.dataset.expect = 'Framed episode'; }
+    if (audio && !audio.src) { audio.src = beepUrl(440, 250); audio.dataset.expect = 'Framed episode'; }
   };
   frame.addEventListener('load', fillFrame);
   fillFrame();
@@ -520,6 +524,14 @@
       const shown = onTop();
       check(inDialog && shown, 'the panel stays on top of a modal dialog and clickable',
         inDialog ? (shown ? '' : 'inside the dialog but covered') : 'not inside the dialog');
+      // A second modal dialog on top (it comes earlier in the page): the panel follows it, then goes back.
+      const confirmDialog = document.getElementById('confirm');
+      confirmDialog.showModal();
+      await wait(700);
+      check(confirmDialog.contains(hostNow()) && onTop(), 'the panel moves into a second dialog opened on top');
+      confirmDialog.close();
+      await wait(300);
+      check(modal.contains(hostNow()) && onTop(), 'the panel goes back into the first dialog when the second closes');
       modal.close();
       await wait(300);
       check(hostNow().parentNode === document.documentElement && onTop(), 'the panel leaves the dialog when it closes');
@@ -558,6 +570,11 @@
       await wait(100);
       check(Math.abs(ctl.inspect().rate - 2) < 0.005 && entry.hidden, 'a preset clicked while typing a speed wins',
         'rate ' + ctl.inspect().rate);
+      // Escape cancels typing, and is cancelled itself so a page dialog around the panel stays open.
+      panel.querySelector('.readout').click();
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true, cancelable: true });
+      entry.dispatchEvent(escape);
+      check(escape.defaultPrevented && entry.hidden, 'Escape in the speed box closes only the box');
 
       progress('keyboard shortcuts');
       // Keyboard shortcuts: [ ] \ change the speed, but not while typing, and the page never sees handled keys.
@@ -592,7 +609,7 @@
       const long = document.getElementById('long');
       const resumeButton = () => document.querySelector('speed-ctl').shadowRoot.querySelector('.resume');
       const resumeKey = location.pathname + location.search + ' ' + Math.round(long.duration);
-      const storedAt = () => (JSON.parse(localStorage.getItem('speedCtl.resume.v1') || '{}')[resumeKey] || [])[0];
+      const storedAt = (key = resumeKey) => (JSON.parse(localStorage.getItem('speedCtl.resume.v1') || '{}')[key] || [])[0];
       everyMedia().forEach((el) => el.pause());
       long.currentTime = 100;
       progress('long episode: ' + (await startPlaying(long)));
@@ -620,6 +637,50 @@
       await wait(700);
       check(!!window.__speedCtl && !resumeButton().hidden, 'resume offered after reopening PSA',
         resumeButton().hidden ? 'hidden' : '"' + resumeButton().textContent + '"');
+
+      // A length that differs a little (players refine it as they load) is still the same recording.
+      long.pause();
+      Object.defineProperty(long, 'duration', { configurable: true, get: () => 241.4 });
+      long.currentTime = 0;
+      await wait(700);
+      check(!resumeButton().hidden, 'resume offered when the length is off by just over a second',
+        resumeButton().hidden ? 'hidden' : '"' + resumeButton().textContent + '"');
+      delete long.duration;
+
+      // Saved while playing, without a pause.
+      long.currentTime = 150;
+      progress('long episode at 2:30: ' + (await startPlaying(long)));
+      await until(() => Math.abs((storedAt() || 0) - 150) <= 3, 3000);
+      check(Math.abs(storedAt() - 150) <= 3, 'position saved while playing', 'stored ' + storedAt());
+
+      // A single-page site changing its address while it plays: the position stays with the page it started on.
+      const startedOn = location.href;
+      history.pushState(null, '', location.pathname + '?episode=next');
+      long.pause();
+      await wait(100);
+      const storedKeys = Object.keys(JSON.parse(localStorage.getItem('speedCtl.resume.v1') || '{}'));
+      check(Math.abs(storedAt() - 150) <= 4 && !storedKeys.some((key) => key.includes('episode=next')),
+        'position kept with the page it started on when the address changes', storedKeys.join(', '));
+
+      // A player in a srcdoc frame, on a page reached with tracking parameters: saved under the plain page address.
+      history.replaceState(null, '', location.pathname + '?utm_source=test');
+      const frameAudio = frame.contentDocument.querySelector('audio');
+      frameAudio.currentTime = 100;
+      progress('framed episode: ' + (await startPlaying(frameAudio)));
+      await wait(300);
+      frameAudio.pause();
+      await wait(100);
+      const frameKey = location.pathname + ' ' + Math.round(frameAudio.duration);
+      check(Math.abs(storedAt(frameKey) - 100) <= 2, 'a framed player is saved under the page address, without tracking parameters',
+        Object.keys(JSON.parse(localStorage.getItem('speedCtl.resume.v1') || '{}')).join(', '));
+      history.replaceState(null, '', startedOn);
+
+      // A recording played to its end is forgotten.
+      long.currentTime = long.duration - 1;
+      progress('long episode near its end: ' + (await startPlaying(long)));
+      await until(() => long.ended, 4000);
+      await wait(100);
+      check(storedAt() === undefined, 'a recording played to the end is forgotten', 'stored ' + storedAt());
     } catch (err) {
       check(false, 'the checks stopped with an error', String((err && err.message) || err));
     }
