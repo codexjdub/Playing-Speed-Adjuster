@@ -1,5 +1,5 @@
 # Runs the test page's checks and the real bookmarklet link in three browser engines:
-# Chromium, Firefox and WebKit (Safari's engine).
+# Chromium, Firefox and WebKit (Safari's engine). Then checks the Firefox extension.
 name: Tests
 
 on:
@@ -29,3 +29,20 @@ jobs:
         run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Run the checks
         run: node test/run-checks.mjs --browser ${{ matrix.browser }}
+
+  # The Firefox extension: Mozilla's add-on checker, then a smoke test in the runner's own Firefox.
+  firefox-extension:
+    name: firefox extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check the extension with Mozilla's add-on checker
+        run: npx --yes web-ext@10 lint --source-dir dist/firefox
+      - name: Install Selenium
+        run: npm install --no-save selenium-webdriver@4
+      - name: Run the smoke test
+        run: node test/firefox-extension.mjs

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PSA settings</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #5d6066; --line: #e2e2dc; --accent: #1a66d2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1c1f; --fg: #f2f2f2; --muted: #a3a3aa; --line: #34343a; --accent: #5ea8ff; }
+  }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  fieldset { border: 0; padding: 0; margin: 0 0 18px; }
+  legend, label.title { font-weight: 600; display: block; margin-bottom: 4px; }
+  .hint { color: var(--muted); margin: 2px 0 0; font-size: 13px; }
+  input[type="number"] { width: 6em; }
+  input, textarea, button { font: inherit; }
+  textarea { width: 100%; max-width: 460px; height: 5.5em; box-sizing: border-box; }
+  label.check { display: flex; gap: 8px; align-items: baseline; }
+  button { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
+  #status { color: var(--muted); margin-left: 8px; }
+</style>
+</head>
+<body>
+  <form id="options">
+    <fieldset>
+      <label class="title" for="defaultRate">Speed on sites without one of their own</label>
+      <input id="defaultRate" type="number" min="0.25" max="4" step="0.05" required>
+      <p class="hint">Each site remembers the speed you set there; this one is for the rest.</p>
+    </fieldset>
+    <fieldset>
+      <label class="check"><input id="autoShow" type="checkbox"> Show the small speed pill when something starts playing</label>
+      <label class="check"><input id="shortcuts" type="checkbox"> Keyboard shortcuts on pages with audio or video: [ slower, ] faster, \ 1.5×</label>
+    </fieldset>
+    <fieldset>
+      <label class="title" for="excluded">Sites to leave alone</label>
+      <textarea id="excluded" spellcheck="false" placeholder="meet.google.com"></textarea>
+      <p class="hint">One per line. A site includes its subdomains. Reload a page for a change to apply there.</p>
+    </fieldset>
+  </form>
+  <p>
+    <button id="forget" type="button">Forget saved speeds and places</button>
+    <span id="status" role="status"></span>
+  </p>
+  <script src="options.js"></script>
+</body>
+</html>

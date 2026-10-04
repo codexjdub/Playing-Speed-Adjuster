@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PSA extension test page</title>
+<style>
+  body { margin: 0; padding: 24px 16px; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  audio { display: block; width: 100%; max-width: 420px; }
+  iframe { width: 100%; max-width: 460px; height: 140px; border: 1px dashed #999; border-radius: 8px; }
+</style>
+</head>
+<body>
+  <h1>PSA extension test page</h1>
+  <p>Used by test/firefox-extension.mjs. With the extension installed, PSA starts on its own here.</p>
+  <h2>Episode on this page</h2>
+  <audio id="episode" controls></audio>
+  <h2>Player embedded from another site</h2>
+  <!-- The frame's address comes from ?frame=, so the test can load it from a different origin. -->
+  <iframe id="embed" title="Embedded player"></iframe>
+  <script src="beep.js"></script>
+  <script>
+    document.getElementById('episode').src = beepUrl(330, 60);
+    const frame = new URLSearchParams(location.search).get('frame');
+    document.getElementById('embed').src = frame || 'extension-frame.html';
+  </script>
+</body>
+</html>

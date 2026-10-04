@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Playing Speed Adjuster (PSA)",
+  "short_name": "PSA",
+  "version": "%VERSION%",
+  "description": "Speed up audio and video on any page, keep your place in long recordings, and keep live streams at normal speed.",
+  "homepage_url": "https://codexjdub.github.io/Playing-Speed-Adjuster/",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "psa@codexjdub.github.io",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  },
+  "icons": { "48": "icon.svg", "96": "icon.svg" },
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "scripts": ["background.js"] },
+  "action": {
+    "default_title": "Show or hide the PSA panel",
+    "default_icon": "icon.svg"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Show or hide the PSA panel"
+    }
+  },
+  "options_ui": { "page": "options.html" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_start",
+      "js": ["bridge.js"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_idle",
+      "world": "MAIN",
+      "js": ["psa.js"]
+    }
+  ]
+}

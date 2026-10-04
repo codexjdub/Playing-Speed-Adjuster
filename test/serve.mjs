@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const port = Number(process.env.PORT) || 8765;
+// HOST=:: also answers on localhost over IPv6, which the Firefox extension test uses as a second origin.
+const hostname = process.env.HOST || '127.0.0.1';
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -43,4 +45,4 @@ createServer(async (req, res) => {
   } catch (err) {
     res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found');
   }
-}).listen(port, '127.0.0.1', () => console.log(`Serving on http://127.0.0.1:${port}/test/test-page.html`));
+}).listen(port, hostname, () => console.log(`Serving on http://127.0.0.1:${port}/test/test-page.html`));

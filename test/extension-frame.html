@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Embedded player</title>
+<style>body { margin: 8px; font: 14px system-ui, sans-serif; } audio { display: block; width: 100%; }</style>
+</head>
+<body>
+  <p>Embedded episode</p>
+  <audio id="embedded" controls></audio>
+  <script src="beep.js"></script>
+  <script>document.getElementById('embedded').src = beepUrl(440, 60);</script>
+</body>
+</html>

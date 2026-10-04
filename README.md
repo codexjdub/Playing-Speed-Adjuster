@@ -22,6 +22,12 @@ The [test page](https://codexjdub.github.io/Playing-Speed-Adjuster/test/test-pag
 
 Click the bookmark on a page with audio or video to open the panel. Click it again, or click ×, to close it.
 
+## Firefox extension (preview)
+
+The same PSA also comes as a Firefox extension that runs on its own. It applies your speed and saves your place on every page, shows a small speed pill when something starts playing, and opens the full panel from its toolbar button (or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>). Players embedded from other sites, such as a YouTube video in a blog, follow the page's speed. Its settings page has a speed for sites without one of their own, switches for the pill and the keyboard shortcuts, and a list of sites to leave alone. On its first visit to a site, it brings over the speed and places the bookmarklet saved there.
+
+It isn't on Mozilla's add-on site yet. To try it, open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and choose `dist/firefox/manifest.json` from a copy of this repository. Firefox removes temporary add-ons when it restarts. It needs Firefox 140 or later.
+
 ## Keyboard shortcuts
 
 While the panel is open, including minimized:
@@ -54,11 +60,12 @@ Bookmarklets don't update themselves. The panel shows its version next to "PSA",
   5. The page title.
 
   With a single player on the page, Media Session is tried before nearby text.
+- **Firefox extension.** The build wraps `src/psa.js` in a function and writes it, readable, to `dist/firefox/` with the files in `src/firefox/`. It runs in the page's own world, where wrapping `play()` and holding the speed work, and `bridge.js` passes messages between it and the background script, which keeps settings and positions in extension storage per site (the tab's page origin). A page reaches only its own site's values, and a frame embedded from another site only the speed. On a page without media, it looks only every 5 s, and `[ ] \` are left alone.
 - **Isolation.** The panel lives in a shadow root on a `popover="manual"` host, so it sits in the top layer above page content. It is re-shown on top when fullscreen starts or the page opens its own dialog or popover, and while a modal dialog is open it moves inside it, since a modal dialog makes everything outside it unclickable. The UI is built with DOM calls only (no `innerHTML`), so Trusted Types pages like YouTube don't block it. Styles use a constructed stylesheet, which a `style-src` CSP doesn't block. Keystrokes and clicks inside the panel don't reach the page, so typing a speed doesn't trigger site shortcuts. Clicking panel buttons doesn't take keyboard focus from the page.
 
 ## Limits
 
-- Media inside **cross-site iframes** (e.g. a YouTube embed on a blog) can't be reached. Open the embed's own page and run the bookmarklet there.
+- Media inside **cross-site iframes** (e.g. a YouTube embed on a blog) can't be reached by the bookmarklet. Open the embed's own page and run the bookmarklet there. The Firefox extension reaches them, but only to apply the speed.
 - Closed shadow roots and players that use only the Web Audio API have no reachable media element.
 - In browsers without the Popover API, the panel can't show over a bare fullscreen `<video>` or the page's own dialogs.
 
@@ -81,7 +88,7 @@ To try things by hand, run `npm run serve`, open http://127.0.0.1:8765/test/test
 On every push, two GitHub Actions run:
 
 - **Build check:** rebuilds and fails if the committed `dist/` or `index.html` doesn't match `src/`.
-- **Tests:** runs the same checks in Chromium, Firefox and WebKit (Safari's engine).
+- **Tests:** runs the same checks in Chromium, Firefox and WebKit (Safari's engine). It also checks the Firefox extension with Mozilla's add-on checker and a smoke test in Firefox (`test/firefox-extension.mjs`, which needs `selenium-webdriver` and geckodriver, so it runs only there).
 
 ## License
 
