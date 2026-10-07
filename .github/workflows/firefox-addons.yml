@@ -54,9 +54,15 @@ jobs:
         env:
           RELEASE_NOTES: ${{ github.event.release.body }}
           GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
+          # The script and the reviewer notes come from this workflow's own commit, so a retry of a release
+          # made before they existed works too.
+          git fetch -q --depth=1 origin "$WORKFLOW_SHA"
+          git show "FETCH_HEAD:.github/scripts/amo-metadata.mjs" > "$RUNNER_TEMP/amo-metadata.mjs"
+          git show "FETCH_HEAD:src/firefox/reviewer-notes.txt" > "$RUNNER_TEMP/reviewer-notes.txt"
           if [ -z "$RELEASE_NOTES" ]; then RELEASE_NOTES="$(gh release view "$TAG" --json body -q .body)"; fi
-          RELEASE_NOTES="$RELEASE_NOTES" node .github/scripts/amo-metadata.mjs "$RUNNER_TEMP/amo-metadata.json"
+          RELEASE_NOTES="$RELEASE_NOTES" node "$RUNNER_TEMP/amo-metadata.mjs" "$RUNNER_TEMP/amo-metadata.json" "$RUNNER_TEMP/reviewer-notes.txt"
       - name: Submit to Firefox Add-ons
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
