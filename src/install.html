@@ -55,8 +55,9 @@
     transform: rotate(-1.5deg);
   }
   .mock-bar { display: flex; align-items: center; gap: 6px; height: 30px; font-size: 12px; }
-  .mock-bar b { flex: 1; opacity: 0.7; }
-  .mock-bar b small { margin-left: 6px; font-size: 11px; font-weight: 400; }
+  .mock-bar b { flex: 1; display: flex; align-items: center; gap: 6px; color: rgba(245, 245, 247, 0.7); }
+  .mock-bar b i { width: 7px; height: 7px; border-radius: 50%; background: #5ea8ff; }
+  .mock-bar b small { font-size: 11px; font-weight: 400; }
   .mock-bar span { opacity: 0.8; }
   .mock-meta { margin: 2px 0 10px; }
   .mock-meta small { display: block; font-size: 11px; opacity: 0.65; margin-top: 2px; }
@@ -148,7 +149,7 @@
         <p class="version-note">Version %VERSION%. Your panel shows its version next to “PSA”. If yours is older, drag the button to your bookmarks bar again and delete the old bookmark.</p>
       </div>
       <div class="mock" aria-hidden="true">
-        <div class="mock-bar"><b>PSA<small>%VERSION%</small></b><span>‹ 1/2 ›</span><span>–</span><span>×</span></div>
+        <div class="mock-bar"><b>PSA<i></i><small>%VERSION%</small></b><span>‹ 1/2 ›</span><span>–</span><span>×</span></div>
         <div class="mock-meta"><strong>Morning news, part 1</strong><small>Playing · 3:12 / 24:40 · 14:18 left</small></div>
         <div class="mock-transport">
           <span class="mock-skip">−10s</span>

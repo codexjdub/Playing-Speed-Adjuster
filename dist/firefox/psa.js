@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.6.0';
+  const VERSION = '1.6.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -876,8 +876,12 @@
 .bar { display: flex; align-items: center; gap: 6px; height: 30px; cursor: grab; touch-action: none; }
 .bar:active { cursor: grabbing; }
 .grip { width: 12px; height: 12px; fill: currentColor; opacity: 0.4; flex: none; }
-.brand { flex: 1; font-size: 12px; font-weight: 600; opacity: 0.7; letter-spacing: 0.02em; }
-.version { margin-left: 6px; font-size: 11px; font-weight: 400; }
+.brand {
+  flex: 1; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: rgba(245, 245, 247, 0.7);
+}
+.brand-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #5ea8ff; }
+.version { font-size: 11px; font-weight: 400; }
 .nav { display: flex; align-items: center; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .nav[hidden] { display: none; }
 .count { min-width: 30px; text-align: center; opacity: 0.8; }
@@ -1069,8 +1073,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   );
   const minimizeButton = button('icon', null, 'Minimize', () => setMinimized(true));
   minimizeButton.append(makeIcon(MINIMIZE_PATH).svg);
+  // "PSA" and the blue dot, as on the icon and the pill.
   const brand = make('span', 'brand', 'PSA');
-  brand.append(make('span', 'version', VERSION));
+  brand.append(make('span', 'brand-dot'), make('span', 'version', VERSION));
   ui.bar.append(
     makeIcon(GRIP_PATH, 'grip').svg,
     brand,
@@ -1130,15 +1135,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.note);
 
   // The minimized panel: − and + step the speed, the speed opens a menu of common speeds, and the rest of
-  // the pill expands it when clicked and moves it when dragged. The blue dot, the outline and a brief pulse
-  // when it appears or the speed changes make it easy to spot.
+  // the pill expands it when clicked and moves it when dragged. The blue dot after PSA (as on the icon), the
+  // outline and a brief pulse when it appears or the speed changes make it easy to spot.
   ui.pill = make('div', 'pill');
   ui.pill.title = 'Click to expand, drag to move';
   ui.pillName = make('span', 'pill-name');
   ui.pillName.tabIndex = 0;
   ui.pillName.setAttribute('role', 'button');
   ui.pillName.setAttribute('aria-label', 'Expand the PSA panel');
-  ui.pillName.append(make('span', 'pill-dot'), document.createTextNode('PSA'));
+  ui.pillName.append(document.createTextNode('PSA'), make('span', 'pill-dot'));
   ui.pillName.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();

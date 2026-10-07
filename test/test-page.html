@@ -533,7 +533,9 @@
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === true, 'minimized state is saved');
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).rate === 2.2, 'another tab\'s saved speed is kept');
       check(pill.textContent.includes(ctl.inspect().rate.toFixed(2)), 'pill shows the speed', pill.textContent);
-      check(!!pill.querySelector('.pill-dot'), 'the pill has the blue dot');
+      const pillDot = pill.querySelector('.pill-name > .pill-dot');
+      check(!!pillDot && !pillDot.nextSibling && pillDot.previousSibling.textContent === 'PSA', 'the pill has the blue dot after PSA');
+      check(!!panel.querySelector('.bar .brand-dot'), "the full panel's top bar has the blue dot");
       check(pill.classList.contains('pulse') || matchMedia('(prefers-reduced-motion: reduce)').matches, 'the pill pulses when it appears');
 
       // The pill's − and + step by 0.1, and its speed opens a menu of common speeds.
