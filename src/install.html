@@ -45,6 +45,8 @@
   .bm svg { width: 18px; height: 18px; fill: currentColor; }
   .hint { font-size: 14px; color: var(--muted); line-height: 1.45; }
   .version-note { margin: 24px 0 0; font-size: 14px; color: var(--muted); max-width: 32em; }
+  .firefox { margin: 20px 0 0; font-size: 15px; color: var(--muted); max-width: 32em; }
+  .firefox a { font-weight: 600; }
 
   .mock {
     width: 272px; max-width: 100%; justify-self: center; padding: 4px 10px 10px; border-radius: 12px;
@@ -142,6 +144,7 @@
           <a class="bm" href="%BOOKMARKLET%" title="Drag to your bookmarks bar"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3v10l6-5zM8.5 3v10l6-5z"/></svg>PSA</a>
           <span class="hint">Drag it to your bookmarks bar.<br>Click it to try it on this page.</span>
         </div>
+        <p class="firefox">Using Firefox? <a href="https://addons.mozilla.org/firefox/addon/playing-speed-adjuster-psa/">Add PSA to Firefox</a> as an extension that runs on its own, updates itself, and also reaches players embedded from other sites.</p>
         <p class="version-note">Version %VERSION%. Your panel shows its version next to “PSA”. If yours is older, drag the button to your bookmarks bar again and delete the old bookmark.</p>
       </div>
       <div class="mock" aria-hidden="true">
@@ -180,6 +183,9 @@
         <li>On any page with audio or video, click <strong>PSA</strong>. Click it again, or ×, to close the panel.</li>
       </ol>
 
+      <h3>Firefox: the extension</h3>
+      <p>In Firefox you can <a href="https://addons.mozilla.org/firefox/addon/playing-speed-adjuster-psa/">add PSA from Firefox Add-ons</a> instead. It runs on every page without a click: your speed is applied as soon as something plays, a small pill shows it, and the toolbar button opens the full panel. It updates itself, and its settings page has a speed for sites without one of their own. It needs Firefox 140 or later, on computers and on Android.</p>
+
       <h3>Can't drag it?</h3>
       <div class="copy-row">
         <button id="copy" type="button">Copy the bookmarklet</button>
@@ -206,14 +212,14 @@
         <div class="card"><h3>Every player</h3><p>Works with several players on one page, including ones added later. ‹ › switches between them and outlines the one you picked.</p></div>
         <div class="card"><h3>Knows what's playing</h3><p>Shows a title, Play/Pause, −10 s / +20 s skips and the real time left at your speed for the item that most recently started. Videos get a picture-in-picture button.</p></div>
         <div class="card"><h3>Out of the way</h3><p>Drag the panel anywhere, or minimize it to a small pill that shows the speed. It stays on top, even over fullscreen video and the page's pop-ups, until you close it.</p></div>
-        <div class="card"><h3>Private</h3><p>Runs only when you click it and makes no network requests. Settings and positions stay in your browser.</p></div>
+        <div class="card"><h3>Private</h3><p>Makes no network requests, and the bookmarklet runs only when you click it. Settings and positions stay in your browser.</p></div>
       </div>
     </section>
 
     <section id="notes">
       <h2>Good to know</h2>
       <ul class="notes">
-        <li>Media inside another site's embedded player, such as a YouTube video embedded in a blog, can't be reached. Open the video's own page and use PSA there.</li>
+        <li>Media inside another site's embedded player, such as a YouTube video embedded in a blog, can't be reached by the bookmarklet. Open the video's own page and use PSA there, or use the Firefox extension, which applies your speed inside embedded players too.</li>
         <li>Keyboard shortcuts while the panel is open, even minimized: <kbd>[</kbd> slows down by 0.1, <kbd>]</kbd> speeds up by 0.1, <kbd>\</kbd> sets 1.5×. They're ignored while you type in a text field, and ⌘ or Ctrl combinations are left to the browser.</li>
         <li>Live streams, such as live radio, stay at normal speed: they can't run ahead of the broadcast, so speeding them up would only make them buffer. The panel shows “Live · normal speed”.</li>
         <li>The speed is saved per site in that site's local storage, so clearing the site's data resets it.</li>

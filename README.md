@@ -22,11 +22,11 @@ The [test page](https://codexjdub.github.io/Playing-Speed-Adjuster/test/test-pag
 
 Click the bookmark on a page with audio or video to open the panel. Click it again, or click ×, to close it.
 
-## Firefox extension (preview)
+In Firefox, you can [add the extension](https://addons.mozilla.org/firefox/addon/playing-speed-adjuster-psa/) instead; see [Firefox extension](#firefox-extension).
 
-The same PSA also comes as a Firefox extension that runs on its own. It applies your speed and saves your place on every page, shows a small speed pill when something starts playing, and opens the full panel from its toolbar button (or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>). Players embedded from other sites, such as a YouTube video in a blog, follow the page's speed. Its settings page has a speed for sites without one of their own, switches for the pill and the keyboard shortcuts, and a list of sites to leave alone. On its first visit to a site, it brings over the speed and places the bookmarklet saved there.
+## Firefox extension
 
-It isn't on Mozilla's add-on site yet. To try it, open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and choose `dist/firefox/manifest.json` from a copy of this repository. Firefox removes temporary add-ons when it restarts. It needs Firefox 140 or later.
+In Firefox, **[add PSA from Firefox Add-ons](https://addons.mozilla.org/firefox/addon/playing-speed-adjuster-psa/)** to have it run on its own. It applies your speed and saves your place on every page, shows a small speed pill when something starts playing, and opens the full panel from its toolbar button (or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>). Players embedded from other sites, such as a YouTube video in a blog, follow the page's speed. Its settings page has a speed for sites without one of their own, switches for the pill and the keyboard shortcuts, and a list of sites to leave alone. On its first visit to a site, it brings over the speed and places the bookmarklet saved there. It updates itself, and needs Firefox 140 or later (142 on Android).
 
 ## Keyboard shortcuts
 
@@ -82,6 +82,8 @@ npm test
 `npm ci` installs the development tools (Node 20+): terser for the build and Playwright for the tests. Neither goes into the bookmarklet.
 
 `npm test` opens the test page in headless Chrome, using your installed copy so nothing extra is downloaded. It runs the page's checks and clicks the real bookmarklet link on the install page. The test page covers labelled and unlabelled players, a shared heading with per-player labels, a stubborn page that keeps resetting the speed, a late-inserted player, shadow DOM, a same-origin iframe, off-page audio with Media Session, a playlist that calls `load()`, screen-reader-only text, a fullscreen container, live streams, a text field inside a closed shadow root, modal dialogs (one on top of another too), a popover over the whole page and a long recording; it also checks the skip buttons, the time left, picture-in-picture, resuming, the speed box, minimizing, the outline and the keyboard shortcuts. The runner also checks that the test server serves only the site's files.
+
+To try a local build of the Firefox extension, open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and choose `dist/firefox/manifest.json`. Firefox removes it when it restarts.
 
 To try things by hand, run `npm run serve`, open http://127.0.0.1:8765/test/test-page.html, click **Load PSA**, pick a speed other than 1×, and click **Run checks**.
 
