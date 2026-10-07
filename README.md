@@ -92,6 +92,8 @@ On every push, two GitHub Actions run:
 - **Build check:** rebuilds and fails if the committed `dist/` or `index.html` doesn't match `src/`.
 - **Tests:** runs the same checks in Chromium, Firefox and WebKit (Safari's engine). It also checks the Firefox extension with Mozilla's add-on checker and a smoke test in Firefox (`test/firefox-extension.mjs`, which needs `selenium-webdriver` and geckodriver, so it runs only there).
 
+Publishing a GitHub release runs a third, **Firefox Add-ons**, which submits that version of the extension to Firefox Add-ons with its source code, the notes for Mozilla's reviewers (`src/firefox/reviewer-notes.txt`) and the release's "What's new". It needs two repository secrets, `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`, from an [API key on Firefox Add-ons](https://addons.mozilla.org/developers/addon/api/key/). A failed submission can be retried from the Actions tab with **Run workflow** and the release's tag.
+
 ## License
 
 [MIT](LICENSE)

@@ -1,0 +1,73 @@
+# Submits each new release of the Firefox extension to Firefox Add-ons (addons.mozilla.org), with its source
+# code, the notes for Mozilla's reviewers (src/firefox/reviewer-notes.txt) and the release's "What's new".
+# Mozilla's review then runs as for an upload by hand.
+#
+# Needs two repository secrets, from an API key created at https://addons.mozilla.org/developers/addon/api/key/:
+#   AMO_JWT_ISSUER   the "JWT issuer"
+#   AMO_JWT_SECRET   the "JWT secret"
+name: Firefox Add-ons
+
+on:
+  release:
+    types: [published]
+  # To retry a release whose submission failed: Actions → Firefox Add-ons → Run workflow, with its tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to submit, e.g. v1.5.2
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install build tools
+        run: npm ci
+      - name: Rebuild and check it matches the release
+        run: |
+          npm run build
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::The committed build in $TAG doesn't match src/."
+            exit 1
+          fi
+          version="v$(node -p "require('./dist/firefox/manifest.json').version")"
+          if [ "$version" != "$TAG" ]; then
+            echo "::error::The extension is $version but the release is $TAG."
+            exit 1
+          fi
+      - name: Package the source code for Mozilla's reviewers
+        run: git archive --format=zip -o "$RUNNER_TEMP/psa-source.zip" HEAD
+      - name: Write this version's release notes and reviewer notes
+        env:
+          RELEASE_NOTES: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$RELEASE_NOTES" ]; then RELEASE_NOTES="$(gh release view "$TAG" --json body -q .body)"; fi
+          RELEASE_NOTES="$RELEASE_NOTES" node .github/scripts/amo-metadata.mjs "$RUNNER_TEMP/amo-metadata.json"
+      - name: Submit to Firefox Add-ons
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
+            echo "::error::Add the AMO_JWT_ISSUER and AMO_JWT_SECRET repository secrets first."
+            exit 1
+          fi
+          npx --yes web-ext@10 sign --channel listed --source-dir dist/firefox \
+            --artifacts-dir "$RUNNER_TEMP/web-ext-artifacts" \
+            --upload-source-code "$RUNNER_TEMP/psa-source.zip" \
+            --amo-metadata "$RUNNER_TEMP/amo-metadata.json" \
+            --approval-timeout 0
