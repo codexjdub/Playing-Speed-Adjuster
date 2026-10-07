@@ -10,7 +10,7 @@ PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` a
 - Keeps re-applying the speed so sites that reset `playbackRate` don't win.
 - Play/Pause, −10 s / +20 s skips, a best-effort title and the real time left at your speed for the active item (the one that most recently started playing), plus a picture-in-picture button for videos. Use ‹ › to pick another item; the one you pick is outlined on the page, and scrolled into view if needed.
 - Live streams (live radio, anything without an end) stay at normal speed, since speeding them up only causes buffering.
-- Drag the panel by its top bar, or minimize it to a small pill that shows the speed (remembered per site). It stays open until you click × or run the bookmarklet again, and stays on top of fullscreen video and the page's own dialogs and popovers.
+- Drag the panel by its top bar, or minimize it (or double-click the bar) to a small pill that shows the speed, remembered per site. The pill has − and + for 0.1 steps, a menu of common speeds behind the speed, and a blue dot and a brief pulse so it's easy to spot. In fullscreen it moves to the top-left corner. It stays open until you click × or run the bookmarklet again, and stays on top of fullscreen video and the page's own dialogs and popovers.
 
 ## Install
 

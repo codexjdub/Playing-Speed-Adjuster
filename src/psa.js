@@ -28,7 +28,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.5.1';
+  const VERSION = '1.6.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -45,6 +45,8 @@
   const FIGHT_LIMIT = 8;
   const FIGHT_WINDOW_MS = 2000;
   const TITLE_TTL_MS = 2000;
+  // In fullscreen the pill moves to this corner of the screen, out of the way of the video's own controls.
+  const FULLSCREEN_SPOT = { x: 16, y: 16 };
   // A duration that grows counts as a sign of a live stream at most this often.
   const GROWTH_GAP_MS = 1500;
   const STORE_KEY = 'speedCtl.v1';
@@ -272,6 +274,7 @@
     save('rate', rate);
     mediaList.forEach(applyRate);
     render();
+    pulsePill();
     if (badged) updateBadge();
   }
 
@@ -281,6 +284,7 @@
     rate = clampRate(value);
     mediaList.forEach(applyRate);
     render();
+    pulsePill();
   }
 
   // ---- Resume positions -------------------------------------------------------------------------
@@ -928,17 +932,40 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .note[hidden] { display: none; }
 .panel[hidden] { display: none; }
 .pill {
-  display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
-  font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #f5f5f7; background: rgba(28, 28, 30, 0.96); border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); cursor: grab; touch-action: none;
+  position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 4px 5px 4px 11px;
+  border-radius: 999px; font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #f5f5f7; background: rgba(28, 28, 30, 0.96); border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45); cursor: grab; touch-action: none;
   -webkit-user-select: none; user-select: none; white-space: nowrap;
 }
 .pill:active { cursor: grabbing; }
-.pill:focus-visible { outline: 2px solid #5ea8ff; outline-offset: 2px; }
 .pill[hidden] { display: none; }
-.pill-name { opacity: 0.7; font-size: 12px; }
-.pill-rate { font-variant-numeric: tabular-nums; }
+.pill-name {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; border-radius: 6px;
+  font-size: 12px; color: rgba(245, 245, 247, 0.75);
+}
+.pill-name:focus-visible { outline: 2px solid #5ea8ff; outline-offset: 2px; }
+.pill-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #5ea8ff; }
+.pill button { height: 26px; min-width: 26px; padding: 0 6px; border-radius: 999px; background: transparent; font-weight: 600; }
+.pill button:hover { background: rgba(255, 255, 255, 0.14); }
+.pill .pill-step { font-size: 16px; }
+.pill-rate { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
+.pill-rate svg { width: 10px; height: 10px; fill: currentColor; opacity: 0.7; }
+.pill-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; display: flex; flex-direction: column; min-width: 96px;
+  padding: 4px; border-radius: 10px; background: rgba(28, 28, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.pill-menu.up { top: auto; bottom: calc(100% + 6px); }
+.pill-menu[hidden] { display: none; }
+.pill .pill-menu button { width: 100%; height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; font-variant-numeric: tabular-nums; }
+.pill .pill-menu button[aria-checked="true"] { background: #5ea8ff; color: #0b1b2e; }
+.pill.pulse { animation: pill-pulse 0.9s ease-out 2; }
+@keyframes pill-pulse {
+  from { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(94, 168, 255, 0.75); }
+  to { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 12px rgba(94, 168, 255, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .pill.pulse { animation: none; } }
 .glow {
   position: fixed; pointer-events: none; border: 3px solid #5ea8ff; border-radius: 8px;
   box-shadow: 0 0 0 4px rgba(94, 168, 255, 0.35), 0 0 24px rgba(94, 168, 255, 0.5);
@@ -953,6 +980,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   const PAUSE_PATH = 'M3.5 2h3v12h-3zM9.5 2h3v12h-3z';
   const MINIMIZE_PATH = 'M3 11.5h10V13H3z';
   const PIP_PATH = 'M1 3h14v10H1zM2.5 4.5v7h11v-7zM8 8h4.5v2.5H8z';
+  const CARET_PATH = 'M3.5 6h9L8 11z';
   const GRIP_PATH = 'M4 1h3v3H4zM9 1h3v3H9zM4 6.5h3v3H4zM9 6.5h3v3H9zM4 12h3v3H4zM9 12h3v3H9z';
 
   function make(tag, className, text) {
@@ -1096,20 +1124,54 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.note);
 
-  // The minimized panel: click to expand, drag to move.
+  // The minimized panel: − and + step the speed, the speed opens a menu of common speeds, and the rest of
+  // the pill expands it when clicked and moves it when dragged. The blue dot, the outline and a brief pulse
+  // when it appears or the speed changes make it easy to spot.
   ui.pill = make('div', 'pill');
-  ui.pill.tabIndex = 0;
-  ui.pill.setAttribute('role', 'button');
-  ui.pill.setAttribute('aria-label', 'Expand the PSA panel');
   ui.pill.title = 'Click to expand, drag to move';
-  ui.pillRate = make('span', 'pill-rate');
-  ui.pill.append(make('span', 'pill-name', 'PSA'), ui.pillRate);
-  ui.pill.addEventListener('keydown', (event) => {
+  ui.pillName = make('span', 'pill-name');
+  ui.pillName.tabIndex = 0;
+  ui.pillName.setAttribute('role', 'button');
+  ui.pillName.setAttribute('aria-label', 'Expand the PSA panel');
+  ui.pillName.append(make('span', 'pill-dot'), document.createTextNode('PSA'));
+  ui.pillName.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       setMinimized(false);
     }
   });
+  ui.pillRateText = make('span', null);
+  ui.pillRate = button('pill-rate', null, null, () => togglePillMenu());
+  ui.pillRate.setAttribute('aria-haspopup', 'menu');
+  ui.pillRate.setAttribute('aria-expanded', 'false');
+  ui.pillRate.append(ui.pillRateText, makeIcon(CARET_PATH).svg);
+  ui.pillMenu = make('div', 'pill-menu');
+  ui.pillMenu.setAttribute('role', 'menu');
+  ui.pillMenu.hidden = true;
+  ui.pillChoices = PRESETS.map((value) => {
+    const node = button('', value + '×', null, () => {
+      setRate(value);
+      closePillMenu();
+    });
+    node.setAttribute('role', 'menuitemradio');
+    ui.pillMenu.append(node);
+    return { node, value };
+  });
+  ui.pill.append(
+    ui.pillName,
+    button('pill-step', '−', 'Slower by ' + KEY_STEP, () => setRate(rate - KEY_STEP)),
+    ui.pillRate,
+    button('pill-step', '+', 'Faster by ' + KEY_STEP, () => setRate(rate + KEY_STEP)),
+    ui.pillMenu
+  );
+  ui.pill.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !ui.pillMenu.hidden) {
+      event.preventDefault();
+      closePillMenu();
+      ui.pillRate.focus();
+    }
+  });
+  ui.pill.addEventListener('animationend', () => ui.pill.classList.remove('pulse'));
 
   // Outline drawn over the page around the player chosen with ‹ ›.
   ui.glow = make('div', 'glow');
@@ -1130,6 +1192,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!event.target.closest || !event.target.closest('button')) return;
     event.preventDefault();
     closeEntry(true);
+  });
+  ui.pill.addEventListener('mousedown', (event) => {
+    if (event.target.closest && event.target.closest('button')) event.preventDefault();
+  });
+  // Double-clicking the panel's top bar shrinks it to the pill.
+  ui.bar.addEventListener('dblclick', (event) => {
+    if (!event.target.closest('button')) setMinimized(true);
   });
 
   function showNote(text) {
@@ -1266,10 +1335,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (ui.resume.hidden === offer) {
       ui.resume.hidden = !offer;
       // The panel just got taller or shorter; keep it on screen.
-      if (desired) placeAt(desired.x, desired.y);
+      placeHost();
     }
     setText(ui.readout, formatRate(rate));
-    setText(ui.pillRate, formatRate(rate));
+    setText(ui.pillRateText, formatRate(rate));
+    const pillLabel = 'Speed ' + formatRate(rate) + ': choose another';
+    if (ui.pillRate.getAttribute('aria-label') !== pillLabel) ui.pillRate.setAttribute('aria-label', pillLabel);
+    ui.pillChoices.forEach(({ node, value }) => {
+      const checked = String(sameRate(value, rate));
+      if (node.getAttribute('aria-checked') !== checked) node.setAttribute('aria-checked', checked);
+    });
     ui.presets.forEach(({ node, value }) => {
       const pressed = String(sameRate(value, rate));
       if (node.getAttribute('aria-pressed') !== pressed) node.setAttribute('aria-pressed', pressed);
@@ -1380,10 +1455,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!ext) save('min', value);
     ui.panel.hidden = value;
     ui.pill.hidden = !value;
+    closePillMenu();
     if (value) ui.glow.hidden = true;
     // The same top-left corner is kept; clamping keeps the larger panel on screen when it expands.
-    if (desired) placeAt(desired.x, desired.y);
-    if (!value) render();
+    placeHost();
+    if (value) pulsePill();
+    else render();
+  }
+
+  // A soft blue ring flashes twice around the pill when it appears and when the speed changes.
+  function pulsePill() {
+    if (!minimized || ui.pill.hidden || !shown) return;
+    ui.pill.classList.remove('pulse');
+    void ui.pill.offsetWidth; // restarts the animation
+    ui.pill.classList.add('pulse');
+  }
+
+  // The menu of common speeds under the pill's speed, or above it when there's no room below.
+  function openPillMenu() {
+    ui.pillMenu.hidden = false;
+    ui.pillRate.setAttribute('aria-expanded', 'true');
+    const box = ui.pill.getBoundingClientRect();
+    ui.pillMenu.classList.toggle('up', box.bottom + ui.pillMenu.offsetHeight + 8 > viewport().height);
+  }
+
+  function closePillMenu() {
+    if (ui.pillMenu.hidden) return;
+    ui.pillMenu.hidden = true;
+    ui.pillRate.setAttribute('aria-expanded', 'false');
+  }
+
+  function togglePillMenu() {
+    if (ui.pillMenu.hidden) openPillMenu();
+    else closePillMenu();
+  }
+
+  // A press anywhere outside the pill closes its menu.
+  function onOutsidePress(event) {
+    if (!ui.pillMenu.hidden && event.composedPath().indexOf(ui.pill) === -1) closePillMenu();
   }
 
   // ---- Highlighting the chosen player -----------------------------------------------------------
@@ -1479,12 +1588,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     return { x: left, y: top };
   }
 
+  // Where the panel goes: the spot it was dragged to, except that in fullscreen the pill sits in the top-left
+  // corner, or wherever it is dragged during that fullscreen (which isn't saved).
+  let fullscreenSpot = null;
+
+  function placeHost() {
+    const spot = minimized && fullscreenSpot ? fullscreenSpot : desired;
+    if (spot) placeAt(spot.x, spot.y);
+  }
+
   // Both the panel's top bar and the minimized pill drag the panel. A press that doesn't move
-  // (less than 4px) is a click, which expands the pill.
+  // (less than 4px) is a click, which expands the pill. Its buttons and menu don't start a drag.
   let drag = null;
   [ui.bar, ui.pill].forEach((handle) => {
     handle.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || event.target.closest('button')) return;
+      if (event.button !== 0 || event.target.closest('button, .pill-menu')) return;
       const box = host.getBoundingClientRect();
       drag = {
         id: event.pointerId,
@@ -1502,21 +1620,26 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       if (!drag || event.pointerId !== drag.id) return;
       if (!drag.moved && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) < 4) return;
       drag.moved = true;
-      desired = placeAt(event.clientX - drag.dx, event.clientY - drag.dy);
+      const spot = placeAt(event.clientX - drag.dx, event.clientY - drag.dy);
+      if (minimized && fullscreenSpot) fullscreenSpot = spot;
+      else desired = spot;
     });
     const endDrag = (event) => {
       if (!drag || event.pointerId !== drag.id) return;
       const ended = drag;
       drag = null;
-      if (ended.moved) save('pos', desired);
-      else if (ended.handle === ui.pill && event.type === 'pointerup') setMinimized(false);
+      if (ended.moved) {
+        if (!(minimized && fullscreenSpot)) save('pos', desired);
+      } else if (ended.handle === ui.pill && event.type === 'pointerup') {
+        setMinimized(false);
+      }
     };
     handle.addEventListener('pointerup', endDrag);
     handle.addEventListener('pointercancel', endDrag);
   });
 
   function onResize() {
-    if (desired) placeAt(desired.x, desired.y);
+    placeHost();
   }
 
   // ---- Mounting ---------------------------------------------------------------------------------
@@ -1597,8 +1720,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     shown = true;
     setMinimized(min);
     mount(true);
-    if (desired) placeAt(desired.x, desired.y);
+    placeHost();
     render();
+    if (min) pulsePill();
   }
 
   function hideUi() {
@@ -1647,10 +1771,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   function onFullscreenChange() {
+    fullscreenSpot = fullscreenElement() ? { x: FULLSCREEN_SPOT.x, y: FULLSCREEN_SPOT.y } : null;
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();
-    if (desired) placeAt(desired.x, desired.y);
+    placeHost();
   }
 
   // ---- Lifecycle --------------------------------------------------------------------------------
@@ -1706,6 +1831,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     locked.forEach((undo) => safely(undo));
     locked.clear();
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('pointerdown', onOutsidePress, true);
     window.removeEventListener('pagehide', savePositions);
     document.removeEventListener('visibilitychange', savePositions);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
@@ -1750,6 +1876,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   window.addEventListener('resize', onResize);
+  window.addEventListener('pointerdown', onOutsidePress, true);
   window.addEventListener('pagehide', savePositions);
   document.addEventListener('visibilitychange', savePositions);
   document.addEventListener('fullscreenchange', onFullscreenChange);

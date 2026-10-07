@@ -533,11 +533,57 @@
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === true, 'minimized state is saved');
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).rate === 2.2, 'another tab\'s saved speed is kept');
       check(pill.textContent.includes(ctl.inspect().rate.toFixed(2)), 'pill shows the speed', pill.textContent);
+      check(!!pill.querySelector('.pill-dot'), 'the pill has the blue dot');
+      check(pill.classList.contains('pulse') || matchMedia('(prefers-reduced-motion: reduce)').matches, 'the pill pulses when it appears');
+
+      // The pill's − and + step by 0.1, and its speed opens a menu of common speeds.
+      const beforeStep = ctl.inspect().rate;
+      pill.querySelector('[aria-label^="Faster"]').click();
+      check(Math.abs(ctl.inspect().rate - Math.min(4, beforeStep + 0.1)) < 0.005, "the pill's + speeds up by 0.1",
+        beforeStep + ' → ' + ctl.inspect().rate);
+      pill.querySelector('[aria-label^="Slower"]').click();
+      check(Math.abs(ctl.inspect().rate - beforeStep) < 0.005, "the pill's − slows down by 0.1", '→ ' + ctl.inspect().rate);
+      const pillMenu = pill.querySelector('.pill-menu');
+      pill.querySelector('.pill-rate').click();
+      const choice = [...pillMenu.querySelectorAll('button')].find((b) => b.textContent === '2.5×');
+      check(!pillMenu.hidden && !!choice, "the pill's speed opens a menu of speeds");
+      if (choice) choice.click();
+      check(Math.abs(ctl.inspect().rate - 2.5) < 0.005 && pillMenu.hidden, 'choosing from the menu sets the speed and closes it',
+        'rate ' + ctl.inspect().rate);
+
+      // Pressing the pill's buttons never drags it.
+      const hostAt = () => {
+        const r = document.querySelector('speed-ctl').getBoundingClientRect();
+        return Math.round(r.left) + ',' + Math.round(r.top);
+      };
+      const placeBefore = hostAt();
+      const plus = pill.querySelector('[aria-label^="Faster"]');
+      const pointer = (type, x) => plus.dispatchEvent(new PointerEvent(type, { pointerId: 9, button: 0, clientX: x, clientY: x, bubbles: true, composed: true }));
+      pointer('pointerdown', 100);
+      pointer('pointermove', 160);
+      pointer('pointerup', 160);
+      check(hostAt() === placeBefore && ctl.inspect().minimized, "dragging doesn't start on the pill's buttons", placeBefore + ' → ' + hostAt());
+
+      // In fullscreen the pill moves to the top-left corner, and back afterwards (simulated: tests can't go fullscreen).
+      const fsBox = document.getElementById('fsbox');
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fsBox });
+      document.dispatchEvent(new Event('fullscreenchange'));
+      await wait(200);
+      const inFullscreen = hostAt();
+      delete document.fullscreenElement;
+      document.dispatchEvent(new Event('fullscreenchange'));
+      await wait(200);
+      check(inFullscreen === '16,16' && hostAt() === placeBefore, 'in fullscreen the pill moves to the top left, and back after',
+        inFullscreen + ', then ' + hostAt());
       pill.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       pill.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       await wait(100);
       check(pill.hidden && !panel.querySelector('.panel').hidden, 'clicking the pill expands the panel');
       check(JSON.parse(localStorage.getItem('speedCtl.v1')).min === false, 'expanded state is saved');
+      panel.querySelector('.bar').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true }));
+      check(ctl.inspect().minimized && !pill.hidden, 'double-clicking the top bar shrinks the panel to the pill');
+      pill.querySelector('.pill-name').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      check(!ctl.inspect().minimized, "Enter on the pill's PSA expands the panel");
 
       progress('speed box');
       // A button pressed while the speed box is open: what was typed is saved first, then the button acts.
