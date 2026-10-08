@@ -99,6 +99,8 @@ try {
   await page.click('#load');
   await page.waitForFunction(() => window.__speedCtl, null, { timeout: 10000 });
   await page.click('#checks');
+  // Off to the side: PSA doesn't fade in fullscreen while the pointer is on it.
+  await page.mouse.move(5, 715);
   const results = await page
     .waitForFunction(() => window.__speedCtlCheckResults, null, { timeout: 90000 })
     .then((handle) => handle.jsonValue())

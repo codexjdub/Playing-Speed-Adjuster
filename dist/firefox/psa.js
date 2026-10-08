@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.6.1';
+  const VERSION = '1.7.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -50,8 +50,10 @@
   const FIGHT_LIMIT = 8;
   const FIGHT_WINDOW_MS = 2000;
   const TITLE_TTL_MS = 2000;
-  // In fullscreen the pill moves to this corner of the screen, out of the way of the video's own controls.
+  // In fullscreen PSA has a spot of its own, remembered per site once moved there, and starting in this corner.
   const FULLSCREEN_SPOT = { x: 16, y: 16 };
+  // In fullscreen PSA fades away after this long without the mouse moving, like a video's own controls.
+  const IDLE_FADE_MS = 3000;
   // A duration that grows counts as a sign of a live stream at most this often.
   const GROWTH_GAP_MS = 1500;
   const STORE_KEY = 'speedCtl.v1';
@@ -280,6 +282,7 @@
     mediaList.forEach(applyRate);
     render();
     pulsePill();
+    if (fullscreenSpot) wake();
     if (badged) updateBadge();
   }
 
@@ -290,6 +293,7 @@
     mediaList.forEach(applyRate);
     render();
     pulsePill();
+    if (fullscreenSpot) wake();
   }
 
   // ---- Resume positions -------------------------------------------------------------------------
@@ -975,6 +979,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   to { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 12px rgba(94, 168, 255, 0); }
 }
 @media (prefers-reduced-motion: reduce) { .pill.pulse { animation: none; } }
+.panel, .pill { transition: opacity 0.35s ease; }
+.panel.faded, .pill.faded { opacity: 0; pointer-events: none; }
 .glow {
   position: fixed; pointer-events: none; border: 3px solid #5ea8ff; border-radius: 8px;
   box-shadow: 0 0 0 4px rgba(94, 168, 255, 0.35), 0 0 24px rgba(94, 168, 255, 0.5);
@@ -1475,7 +1481,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   // A soft blue ring flashes twice around the pill when it appears and when the speed changes.
   function pulsePill() {
-    if (!minimized || ui.pill.hidden || !shown) return;
+    // Not in fullscreen, where the pill stays out of the way.
+    if (!minimized || ui.pill.hidden || !shown || fullscreenSpot) return;
     ui.pill.classList.remove('pulse');
     void ui.pill.offsetWidth; // restarts the animation
     ui.pill.classList.add('pulse');
@@ -1598,13 +1605,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     return { x: left, y: top };
   }
 
-  // Where the panel goes: the spot it was dragged to, except that in fullscreen the pill sits in the top-left
-  // corner, or wherever it is dragged during that fullscreen (which isn't saved).
-  let fullscreenSpot = null;
+  // Where the panel goes: the spot it was dragged to, or in fullscreen its fullscreen spot, which starts in the
+  // top-left corner and is remembered per site once PSA is dragged during fullscreen.
+  const savedFullscreen = saved.fsPos;
+  let fullscreenHome =
+    savedFullscreen && isFinite(savedFullscreen.x) && isFinite(savedFullscreen.y)
+      ? { x: savedFullscreen.x, y: savedFullscreen.y }
+      : { x: FULLSCREEN_SPOT.x, y: FULLSCREEN_SPOT.y };
+  let fullscreenSpot = null; // set while something is fullscreen
+  let fadeTimer = 0;
 
   function placeHost() {
-    const spot = minimized && fullscreenSpot ? fullscreenSpot : desired;
+    const spot = fullscreenSpot || desired;
     if (spot) placeAt(spot.x, spot.y);
+  }
+
+  // In fullscreen PSA fades away after IDLE_FADE_MS without the mouse moving, and comes back when the mouse
+  // moves or the speed changes. It stays while the pointer is on it, its menu or speed box is open, or it
+  // has keyboard focus. While faded it lets clicks through to the video.
+  function wake() {
+    clearTimeout(fadeTimer);
+    setFaded(false);
+    if (fullscreenSpot) fadeTimer = setTimeout(fadeIfIdle, IDLE_FADE_MS);
+  }
+
+  function fadeIfIdle() {
+    if (!alive || !fullscreenSpot) return;
+    const busy = drag || !ui.pillMenu.hidden || !ui.entry.hidden || shadow.activeElement || host.matches(':hover');
+    if (busy) wake();
+    else setFaded(true);
+  }
+
+  function setFaded(value) {
+    ui.panel.classList.toggle('faded', value);
+    ui.pill.classList.toggle('faded', value);
+  }
+
+  function onPointerMove() {
+    if (fullscreenSpot) wake();
   }
 
   // Both the panel's top bar and the minimized pill drag the panel. A press that doesn't move
@@ -1631,7 +1669,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       if (!drag.moved && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) < 4) return;
       drag.moved = true;
       const spot = placeAt(event.clientX - drag.dx, event.clientY - drag.dy);
-      if (minimized && fullscreenSpot) fullscreenSpot = spot;
+      if (fullscreenSpot) fullscreenSpot = spot;
       else desired = spot;
     });
     const endDrag = (event) => {
@@ -1639,7 +1677,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       const ended = drag;
       drag = null;
       if (ended.moved) {
-        if (!(minimized && fullscreenSpot)) save('pos', desired);
+        if (fullscreenSpot) {
+          fullscreenHome = fullscreenSpot;
+          save('fsPos', fullscreenHome);
+        } else {
+          save('pos', desired);
+        }
       } else if (ended.handle === ui.pill && event.type === 'pointerup') {
         setMinimized(false);
       }
@@ -1781,11 +1824,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   function onFullscreenChange() {
-    fullscreenSpot = fullscreenElement() ? { x: FULLSCREEN_SPOT.x, y: FULLSCREEN_SPOT.y } : null;
+    fullscreenSpot = fullscreenElement() ? { x: fullscreenHome.x, y: fullscreenHome.y } : null;
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();
     placeHost();
+    // Starts the idle fade in fullscreen; after it, makes sure PSA is visible again.
+    wake();
   }
 
   // ---- Lifecycle --------------------------------------------------------------------------------
@@ -1842,6 +1887,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     locked.clear();
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointerdown', onOutsidePress, true);
+    window.removeEventListener('pointermove', onPointerMove, true);
+    clearTimeout(fadeTimer);
     window.removeEventListener('pagehide', savePositions);
     document.removeEventListener('visibilitychange', savePositions);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
@@ -1887,6 +1934,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   window.addEventListener('resize', onResize);
   window.addEventListener('pointerdown', onOutsidePress, true);
+  window.addEventListener('pointermove', onPointerMove, true);
   window.addEventListener('pagehide', savePositions);
   document.addEventListener('visibilitychange', savePositions);
   document.addEventListener('fullscreenchange', onFullscreenChange);

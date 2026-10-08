@@ -566,17 +566,47 @@
       pointer('pointerup', 160);
       check(hostAt() === placeBefore && ctl.inspect().minimized, "dragging doesn't start on the pill's buttons", placeBefore + ' → ' + hostAt());
 
-      // In fullscreen the pill moves to the top-left corner, and back afterwards (simulated: tests can't go fullscreen).
+      // Fullscreen (simulated: tests can't go fullscreen). PSA has a spot of its own there: the top-left corner
+      // until it is dragged somewhere during fullscreen, which is then remembered.
       const fsBox = document.getElementById('fsbox');
-      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fsBox });
-      document.dispatchEvent(new Event('fullscreenchange'));
-      await wait(200);
+      const fullscreen = async (on) => {
+        if (on) Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fsBox });
+        else delete document.fullscreenElement;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        await wait(200);
+      };
+      const savedSpot = JSON.parse(localStorage.getItem('speedCtl.v1')).fsPos;
+      const expectedStart = savedSpot ? savedSpot.x + ',' + savedSpot.y : '16,16';
+      await fullscreen(true);
       const inFullscreen = hostAt();
-      delete document.fullscreenElement;
-      document.dispatchEvent(new Event('fullscreenchange'));
-      await wait(200);
-      check(inFullscreen === '16,16' && hostAt() === placeBefore, 'in fullscreen the pill moves to the top left, and back after',
-        inFullscreen + ', then ' + hostAt());
+      const pillBox = pill.getBoundingClientRect();
+      const dragPill = (type, dx, dy) => pill.dispatchEvent(new PointerEvent(type, {
+        pointerId: 11, button: 0, clientX: pillBox.left + 4 + dx, clientY: pillBox.top + 4 + dy, bubbles: true, composed: true }));
+      dragPill('pointerdown', 0, 0);
+      dragPill('pointermove', 300, 40);
+      dragPill('pointerup', 300, 40);
+      const dragged = hostAt();
+      // It fades away when the mouse is still, comes back when it moves, and doesn't pulse.
+      await wait(3400);
+      const faded = pill.classList.contains('faded');
+      document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+      const woke = !pill.classList.contains('faded');
+      pill.classList.remove('pulse');
+      pill.querySelector('[aria-label^="Faster"]').click();
+      const pulsed = pill.classList.contains('pulse');
+      pill.querySelector('[aria-label^="Slower"]').click();
+      await fullscreen(false);
+      const afterExit = hostAt();
+      await fullscreen(true);
+      const again = hostAt();
+      await fullscreen(false);
+      check(inFullscreen === expectedStart && afterExit === placeBefore, 'in fullscreen PSA uses its fullscreen spot, and goes back after',
+        inFullscreen + ' (expected ' + expectedStart + '), then ' + afterExit);
+      check(dragged !== inFullscreen && again === dragged && !!JSON.parse(localStorage.getItem('speedCtl.v1')).fsPos,
+        'where it is dragged in fullscreen is remembered for next time', dragged + ', next time ' + again);
+      check(faded && woke, 'in fullscreen it fades away when the mouse is still, and comes back when it moves',
+        'faded ' + faded + ', back ' + woke);
+      check(!pulsed, 'no pulse in fullscreen');
       pill.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       pill.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       await wait(100);

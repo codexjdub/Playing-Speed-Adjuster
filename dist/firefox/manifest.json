@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Playing Speed Adjuster (PSA)",
   "short_name": "PSA",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "Speed up audio and video on any page, keep your place in long recordings, and keep live streams at normal speed.",
   "homepage_url": "https://codexjdub.github.io/Playing-Speed-Adjuster/",
   "browser_specific_settings": {

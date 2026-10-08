@@ -4,7 +4,7 @@
 // Everything is kept per site, meaning the origin of the tab's page, so a player embedded from another
 // site follows the speed of the page it is on. Storage keys:
 //   options          { defaultRate, shortcuts, autoShow, excluded }   set on the options page
-//   site:<origin>    { rate, pos }                                      speed and panel position
+//   site:<origin>    { rate, pos, fsPos }                               speed, panel position, and in fullscreen
 //   resume:<origin>  { "<page> <length>": [seconds, savedAt] }          where recordings were left
 // A page can only reach its own site's values, and frames embedded from other sites only the speed.
 
@@ -64,6 +64,7 @@ const handlers = {
         rate: siteValues && siteValues.rate,
         // Only the page itself gets its panel position and saved places, not frames embedded from elsewhere.
         pos: top && siteValues ? siteValues.pos : undefined,
+        fsPos: top && siteValues ? siteValues.fsPos : undefined,
       },
       positions: top ? stored['resume:' + site] || {} : {},
     };
@@ -74,7 +75,11 @@ const handlers = {
     const top = sender.frameId === 0;
     const valid =
       (message.key === 'rate' && isRate(message.value)) ||
-      (message.key === 'pos' && top && message.value && isFinite(message.value.x) && isFinite(message.value.y));
+      ((message.key === 'pos' || message.key === 'fsPos') &&
+        top &&
+        message.value &&
+        isFinite(message.value.x) &&
+        isFinite(message.value.y));
     if (!site || !valid) return;
     await serially(async () => {
       const key = 'site:' + site;
