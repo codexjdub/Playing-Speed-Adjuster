@@ -28,7 +28,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.0';
+  const VERSION = '1.7.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -975,6 +975,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 }
 @media (prefers-reduced-motion: reduce) { .pill.pulse { animation: none; } }
 .panel, .pill { transition: opacity 0.35s ease; }
+.pill.compact:not(:hover):not(:focus-within) .pill-label,
+.pill.compact:not(:hover):not(:focus-within) .pill-step,
+.pill.compact:not(:hover):not(:focus-within) .pill-rate svg { display: none; }
+.pill.compact:not(:hover):not(:focus-within) { padding-left: 9px; }
+.pill.compact:not(:hover):not(:focus-within) .pill-name { margin-right: 0; }
 .panel.faded, .pill.faded { opacity: 0; pointer-events: none; }
 .glow {
   position: fixed; pointer-events: none; border: 3px solid #5ea8ff; border-radius: 8px;
@@ -1144,7 +1149,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.pillName.tabIndex = 0;
   ui.pillName.setAttribute('role', 'button');
   ui.pillName.setAttribute('aria-label', 'Expand the PSA panel');
-  ui.pillName.append(document.createTextNode('PSA'), make('span', 'pill-dot'));
+  ui.pillName.append(make('span', 'pill-label', 'PSA'), make('span', 'pill-dot'));
   ui.pillName.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -1476,8 +1481,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   // A soft blue ring flashes twice around the pill when it appears and when the speed changes.
   function pulsePill() {
-    // Not in fullscreen, where the pill stays out of the way.
-    if (!minimized || ui.pill.hidden || !shown || fullscreenSpot) return;
+    if (!minimized || ui.pill.hidden || !shown) return;
     ui.pill.classList.remove('pulse');
     void ui.pill.offsetWidth; // restarts the animation
     ui.pill.classList.add('pulse');
@@ -1634,6 +1638,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function setFaded(value) {
     ui.panel.classList.toggle('faded', value);
     ui.pill.classList.toggle('faded', value);
+  }
+
+  // In fullscreen the pill shrinks to the blue dot and the speed, and grows back to the full pill while the
+  // pointer is on it or it has keyboard focus (CSS: .pill.compact).
+  function setCompact(value) {
+    ui.pill.classList.toggle('compact', value);
   }
 
   function onPointerMove() {
@@ -1823,6 +1833,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();
+    setCompact(!!fullscreenSpot);
     placeHost();
     // Starts the idle fade in fullscreen; after it, makes sure PSA is visible again.
     wake();

@@ -586,17 +586,21 @@
       dragPill('pointermove', 300, 40);
       dragPill('pointerup', 300, 40);
       const dragged = hostAt();
-      // It fades away when the mouse is still, comes back when it moves, and doesn't pulse.
+      // It shrinks to the dot and the speed, and grows back with keyboard focus (or the pointer) on it.
+      const minus = pill.querySelector('[aria-label^="Slower"]');
+      const compact = pill.classList.contains('compact') && getComputedStyle(minus).display === 'none' &&
+        getComputedStyle(pill.querySelector('.pill-dot')).display !== 'none' && getComputedStyle(pill.querySelector('.pill-rate')).display !== 'none';
+      pill.querySelector('.pill-name').focus();
+      const grows = getComputedStyle(minus).display !== 'none';
+      pill.querySelector('.pill-name').blur();
+      // It fades away when the mouse is still, and comes back when it moves.
       await wait(3400);
       const faded = pill.classList.contains('faded');
       document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
       const woke = !pill.classList.contains('faded');
-      pill.classList.remove('pulse');
-      pill.querySelector('[aria-label^="Faster"]').click();
-      const pulsed = pill.classList.contains('pulse');
-      pill.querySelector('[aria-label^="Slower"]').click();
       await fullscreen(false);
       const afterExit = hostAt();
+      const fullAgain = !pill.classList.contains('compact') && getComputedStyle(minus).display !== 'none';
       await fullscreen(true);
       const again = hostAt();
       await fullscreen(false);
@@ -606,7 +610,8 @@
         'where it is dragged in fullscreen is remembered for next time', dragged + ', next time ' + again);
       check(faded && woke, 'in fullscreen it fades away when the mouse is still, and comes back when it moves',
         'faded ' + faded + ', back ' + woke);
-      check(!pulsed, 'no pulse in fullscreen');
+      check(compact && grows && fullAgain, 'in fullscreen the pill shrinks to the dot and the speed, and grows back on focus',
+        'compact ' + compact + ', grows ' + grows + ', full after ' + fullAgain);
       pill.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       pill.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       await wait(100);
