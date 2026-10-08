@@ -536,7 +536,10 @@
       const pillDot = pill.querySelector('.pill-name > .pill-dot');
       check(!!pillDot && !pillDot.nextSibling && pillDot.previousSibling.textContent === 'PSA', 'the pill has the blue dot after PSA');
       check(!!panel.querySelector('.bar .brand-dot'), "the full panel's top bar has the blue dot");
-      check(pill.classList.contains('pulse') || matchMedia('(prefers-reduced-motion: reduce)').matches, 'the pill pulses when it appears');
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const dotAnimation = getComputedStyle(pill.querySelector('.pill-dot')).animationName;
+      check(reducedMotion || (pill.classList.contains('pulse') && dotAnimation === 'dot-pulse' && getComputedStyle(pill).animationName === 'none'),
+        "the pill's dot glows when the pill appears", 'dot ' + dotAnimation + ', pill ' + getComputedStyle(pill).animationName);
 
       // The pill's − and + step by 0.1, and its speed opens a menu of common speeds.
       const beforeStep = ctl.inspect().rate;
@@ -701,6 +704,16 @@
       await wait(700);
       check(!!window.__speedCtl && !resumeButton().hidden, 'resume offered after reopening PSA',
         resumeButton().hidden ? 'hidden' : '"' + resumeButton().textContent + '"');
+
+      // Opening straight into the pill (it was minimized last time) makes its dot glow too.
+      window.__speedCtl.destroy();
+      localStorage.setItem('speedCtl.v1', JSON.stringify({ ...JSON.parse(localStorage.getItem('speedCtl.v1')), min: true }));
+      document.getElementById('load').click();
+      await until(() => window.__speedCtl, 3000);
+      const openedPill = document.querySelector('speed-ctl').shadowRoot.querySelector('.pill');
+      check(!openedPill.hidden && (openedPill.classList.contains('pulse') || matchMedia('(prefers-reduced-motion: reduce)').matches),
+        'opening straight into the pill makes its dot glow');
+      localStorage.setItem('speedCtl.v1', JSON.stringify({ ...JSON.parse(localStorage.getItem('speedCtl.v1')), min: false }));
 
       // A length that differs a little (players refine it as they load) is still the same recording.
       long.pause();

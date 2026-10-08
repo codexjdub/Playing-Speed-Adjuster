@@ -28,7 +28,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.1';
+  const VERSION = '1.7.2';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -968,12 +968,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .pill-menu[hidden] { display: none; }
 .pill .pill-menu button { width: 100%; height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; font-variant-numeric: tabular-nums; }
 .pill .pill-menu button[aria-checked="true"] { background: #5ea8ff; color: #0b1b2e; }
-.pill.pulse { animation: pill-pulse 0.9s ease-out 2; }
-@keyframes pill-pulse {
-  from { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(94, 168, 255, 0.75); }
-  to { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 12px rgba(94, 168, 255, 0); }
+.pill.pulse .pill-dot { animation: dot-pulse 0.9s ease-out 2; }
+@keyframes dot-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(94, 168, 255, 0.8); }
+  40% { transform: scale(1.5); }
+  100% { transform: scale(1); box-shadow: 0 0 0 7px rgba(94, 168, 255, 0); }
 }
-@media (prefers-reduced-motion: reduce) { .pill.pulse { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pill.pulse .pill-dot { animation: none; } }
 .panel, .pill { transition: opacity 0.35s ease; }
 .pill.compact:not(:hover):not(:focus-within) .pill-label,
 .pill.compact:not(:hover):not(:focus-within) .pill-step,
@@ -1142,7 +1143,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   // The minimized panel: − and + step the speed, the speed opens a menu of common speeds, and the rest of
   // the pill expands it when clicked and moves it when dragged. The blue dot after PSA (as on the icon), the
-  // outline and a brief pulse when it appears or the speed changes make it easy to spot.
+  // outline and the dot's brief glow when it appears or the speed changes make it easy to spot.
   ui.pill = make('div', 'pill');
   ui.pill.title = 'Click to expand, drag to move';
   ui.pillName = make('span', 'pill-name');
@@ -1479,7 +1480,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     else render();
   }
 
-  // A soft blue ring flashes twice around the pill when it appears and when the speed changes.
+  // The pill's blue dot swells and glows twice when the pill appears and when the speed changes.
   function pulsePill() {
     if (!minimized || ui.pill.hidden || !shown) return;
     ui.pill.classList.remove('pulse');
@@ -1954,5 +1955,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       ? { x: start.x, y: start.y }
       : { x: viewport().width - (host.offsetWidth || 272) - 16, y: 16 };
   placeAt(desired.x, desired.y);
+  // Opening straight into the pill (minimized here last time): the dot glows so it's easy to find.
+  pulsePill();
   timer = setInterval(tick, TICK_MS);
 })();
