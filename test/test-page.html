@@ -572,8 +572,8 @@
       // Fullscreen (simulated: tests can't go fullscreen). PSA has a spot of its own there: the top-left corner
       // until it is dragged somewhere during fullscreen, which is then remembered.
       const fsBox = document.getElementById('fsbox');
-      const fullscreen = async (on) => {
-        if (on) Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fsBox });
+      const fullscreen = async (on, element = fsBox) => {
+        if (on) Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => element });
         else delete document.fullscreenElement;
         document.dispatchEvent(new Event('fullscreenchange'));
         await wait(200);
@@ -607,6 +607,12 @@
       await fullscreen(true);
       const again = hostAt();
       await fullscreen(false);
+      // Over a fullscreen embedded frame the mouse moves where PSA can't see them, so it stays.
+      await fullscreen(true, document.getElementById('frame'));
+      await wait(3400);
+      const fadedOverFrame = pill.classList.contains('faded');
+      await fullscreen(false);
+      check(!fadedOverFrame, "over a fullscreen embedded frame it doesn't fade, since it can't see the mouse there");
       check(inFullscreen === expectedStart && afterExit === placeBefore, 'in fullscreen PSA uses its fullscreen spot, and goes back after',
         inFullscreen + ' (expected ' + expectedStart + '), then ' + afterExit);
       check(dragged !== inFullscreen && again === dragged && !!JSON.parse(localStorage.getItem('speedCtl.v1')).fsPos,

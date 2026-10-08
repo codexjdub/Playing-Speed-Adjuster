@@ -7,9 +7,11 @@
 //   site:<origin>    { rate, pos, fsPos }                               speed, panel position, and in fullscreen
 //   resume:<origin>  { "<page> <length>": [seconds, savedAt] }          where recordings were left
 // A page can only reach its own site's values, and frames embedded from other sites only the speed.
+// Private windows leave nothing behind: they read the saved values, but their changes aren't saved.
 
 const DEFAULT_OPTIONS = { defaultRate: 1, shortcuts: true, autoShow: true, excluded: '' };
 const RESUME_KEEP = 100;
+const NAME_LIMIT = 2000; // characters in a saved place's name ("<page> <length>")
 
 // Storage writes are read-modify-write, so they run one at a time.
 let queue = Promise.resolve();
@@ -29,6 +31,16 @@ async function loadOptions() {
   return { ...DEFAULT_OPTIONS, ...options };
 }
 
+// An entry in the list of sites to leave alone may be a whole address, such as https://meet.google.com/abc
+// pasted from the address bar, or *.example.com: only its host name counts.
+const hostOf = (entry) =>
+  entry
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/:?#].*$/, '')
+    .replace(/^\*\./, '');
+
 function isExcluded(list, url) {
   let host = '';
   try {
@@ -38,12 +50,13 @@ function isExcluded(list, url) {
   }
   return String(list || '')
     .split(/[\s,]+/)
-    .map((site) => site.trim().toLowerCase())
+    .map(hostOf)
     .filter(Boolean)
     .some((site) => host === site || host.endsWith('.' + site));
 }
 
-const isRate = (value) => typeof value === 'number' && value >= 0.25 && value <= 4;
+const isRate = (value) => Number.isFinite(value) && value >= 0.25 && value <= 4;
+const isSpot = (value) => !!value && Number.isFinite(value.x) && Number.isFinite(value.y);
 
 const handlers = {
   // A frame's PSA asks for this site's values when it starts.
@@ -73,32 +86,42 @@ const handlers = {
   async save(message, sender) {
     const site = siteOf(sender);
     const top = sender.frameId === 0;
-    const valid =
-      (message.key === 'rate' && isRate(message.value)) ||
-      ((message.key === 'pos' || message.key === 'fsPos') &&
-        top &&
-        message.value &&
-        isFinite(message.value.x) &&
-        isFinite(message.value.y));
-    if (!site || !valid) return;
-    await serially(async () => {
-      const key = 'site:' + site;
-      const { [key]: values } = await browser.storage.local.get(key);
-      await browser.storage.local.set({ [key]: { ...values, [message.key]: message.value } });
-    });
-    // Every frame of the tab follows a new speed, whichever frame it was changed in.
-    if (message.key === 'rate') browser.tabs.sendMessage(sender.tab.id, { type: 'rate', rate: message.value }).catch(() => {});
+    let value = null;
+    if (message.key === 'rate' && isRate(message.value)) value = message.value;
+    else if ((message.key === 'pos' || message.key === 'fsPos') && top && isSpot(message.value)) {
+      value = { x: message.value.x, y: message.value.y };
+    }
+    if (!site || value === null) return;
+    if (!sender.tab.incognito) {
+      await serially(async () => {
+        const key = 'site:' + site;
+        const { [key]: values } = await browser.storage.local.get(key);
+        await browser.storage.local.set({ [key]: { ...values, [message.key]: value } });
+      });
+    }
+    // Every frame of the tab follows a new speed, whichever frame it was changed in. The frame it came from
+    // knows its own mark (`from`) and ignores it.
+    if (message.key === 'rate') {
+      const from = typeof message.from === 'string' ? message.from.slice(0, 32) : '';
+      browser.tabs.sendMessage(sender.tab.id, { type: 'rate', rate: value, from }).catch(() => {});
+    }
   },
 
   async positions(message, sender) {
     const site = siteOf(sender);
-    if (!site || sender.frameId !== 0) return;
+    if (!site || sender.frameId !== 0 || sender.tab.incognito) return;
+    const remove = Array.isArray(message.remove) ? message.remove.slice(0, RESUME_KEEP) : [];
+    const set = Object.entries(message.set && typeof message.set === 'object' ? message.set : {}).slice(0, RESUME_KEEP);
     await serially(async () => {
       const key = 'resume:' + site;
       const { [key]: stored = {} } = await browser.storage.local.get(key);
-      (Array.isArray(message.remove) ? message.remove : []).forEach((name) => delete stored[name]);
-      Object.entries(message.set || {}).forEach(([name, entry]) => {
-        if (Array.isArray(entry) && isFinite(entry[0]) && isFinite(entry[1])) stored[name] = [entry[0], entry[1]];
+      remove.forEach((name) => {
+        if (typeof name === 'string') delete stored[name];
+      });
+      set.forEach(([name, entry]) => {
+        if (name.length <= NAME_LIMIT && Array.isArray(entry) && Number.isFinite(entry[0]) && Number.isFinite(entry[1])) {
+          stored[name] = [entry[0], entry[1]];
+        }
       });
       const names = Object.keys(stored).sort((a, b) => stored[a][1] - stored[b][1]);
       names.slice(0, Math.max(0, names.length - RESUME_KEEP)).forEach((name) => delete stored[name]);

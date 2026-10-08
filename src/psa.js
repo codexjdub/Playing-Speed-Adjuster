@@ -22,13 +22,18 @@
     else if (typeof previous.destroy === 'function') previous.destroy();
     return;
   }
-  // The extension takes over from a bookmarklet started before it.
-  if (previous && typeof previous.destroy === 'function') previous.destroy();
+  // The extension takes over from a copy started before it: a bookmarklet's, or its own from before an
+  // update, which stop() ends. One from 1.7.4 or earlier has no stop(), and its destroy() would open its
+  // panel instead, so it is left until the page reloads.
+  if (ext && previous) {
+    if (typeof previous.stop === 'function') previous.stop();
+    else if (typeof previous.togglePanel !== 'function' && typeof previous.destroy === 'function') previous.destroy();
+  }
 
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.4';
+  const VERSION = '1.7.5';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -75,8 +80,10 @@
   ];
   const TOP_LAYER_EVENTS = ['toggle', 'close'];
   // The extension runs on every page; on one without media and without its panel showing, it looks only
-  // every IDLE_EVERY ticks.
+  // every IDLE_EVERY ticks, walks the whole page every IDLE_DEEP_EVERY, and doesn't look while the tab is
+  // in the background.
   const IDLE_EVERY = 10;
+  const IDLE_DEEP_EVERY = 60;
 
   // ---- Per-site storage -------------------------------------------------------------------------
   // The bookmarklet uses localStorage, which is already scoped to the site's origin; blocked storage falls
@@ -93,10 +100,13 @@
   }
 
   const saved = ext ? ext.settings : load(STORE_KEY);
+  // The extension passes a new speed to every frame of the tab, this one included; this copy's mark on
+  // the speeds it saves lets it ignore its own, which may arrive after newer presses.
+  const copyId = ext ? Math.random().toString(36).slice(2) : '';
 
   function save(key, value) {
     if (ext) {
-      ext.send({ type: 'save', key, value });
+      ext.send({ type: 'save', key, value, from: copyId });
       return;
     }
     try {
@@ -416,6 +426,7 @@
     });
   }
 
+  // The bookmarklet only: the extension's positions aren't in the page's storage.
   function onStorage(event) {
     if (event.key === RESUME_KEY || event.key === null) positionsCache = null;
   }
@@ -541,8 +552,9 @@
   }
 
   function onKey(event) {
-    // The extension runs everywhere, so it leaves [ ] \ alone on pages without media, or when switched off.
-    if (ext && (saved.shortcuts === false || !mediaList.length)) return;
+    // The extension runs everywhere, so it leaves [ ] \ alone on pages without media (here or in an embedded
+    // player), or when switched off.
+    if (ext && (saved.shortcuts === false || (!mediaList.length && !embeddedPlayed))) return;
     const key = KEYS[event.key];
     // ⌘ and Ctrl belong to the browser (⌘[ is Back); AltGr, which reports Ctrl+Alt, still types [ ] \ on some layouts.
     if (!alive || !key || event.defaultPrevented || event.metaKey || (event.ctrlKey && !event.altKey)) return;
@@ -1615,6 +1627,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       ? { x: savedFullscreen.x, y: savedFullscreen.y }
       : { x: FULLSCREEN_SPOT.x, y: FULLSCREEN_SPOT.y };
   let fullscreenSpot = null; // set while something is fullscreen
+  let fades = false; // fullscreen, and PSA can see the mouse move there
   let fadeTimer = 0;
 
   function placeHost() {
@@ -1628,11 +1641,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function wake() {
     clearTimeout(fadeTimer);
     setFaded(false);
-    if (fullscreenSpot) fadeTimer = setTimeout(fadeIfIdle, IDLE_FADE_MS);
+    if (fades) fadeTimer = setTimeout(fadeIfIdle, IDLE_FADE_MS);
   }
 
   function fadeIfIdle() {
-    if (!alive || !fullscreenSpot) return;
+    if (!alive || !fades) return;
     const busy = drag || !ui.pillMenu.hidden || !ui.entry.hidden || shadow.activeElement || host.matches(':hover');
     if (busy) wake();
     else setFaded(true);
@@ -1650,7 +1663,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   function onPointerMove() {
-    if (fullscreenSpot) wake();
+    if (fades) wake();
   }
 
   // Both the panel's top bar and the minimized pill drag the panel. A press that doesn't move
@@ -1769,12 +1782,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // ---- Showing and hiding (the extension) -------------------------------------------------------
   // The bookmarklet's panel shows from the start. The extension stays out of sight until something
   // starts playing (then as the pill, unless that is switched off) or its toolbar button is clicked.
-  // × hides it again until the toolbar button; speeds are still applied meanwhile. Only the top frame
-  // shows a panel: embedded frames follow its speed and tell it when they start playing.
+  // × or the toolbar button hides it again until the toolbar button; speeds are still applied meanwhile.
+  // Only the top frame shows a panel: embedded frames follow its speed and tell it when they start playing.
 
   let shown = !ext;
   let dismissed = false;
   let badged = false;
+  let embeddedPlayed = false; // a player embedded from another site has played on this page
 
   function showUi(min) {
     if (!ext || !ext.top) return;
@@ -1784,6 +1798,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     placeHost();
     render();
     if (min) pulsePill();
+    // It may have faded out of sight in fullscreen while hidden.
+    wake();
   }
 
   function hideUi() {
@@ -1798,23 +1814,30 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     hideUi();
   }
 
-  // The toolbar button (and the bookmarklet, if also installed): open the full panel, or hide it.
+  // The toolbar button (and the bookmarklet, if also installed): open the full panel, or hide it as × does.
   function togglePanel() {
     if (!ext || !ext.top) return;
-    dismissed = false;
-    if (shown && !minimized) hideUi();
-    else showUi(false);
+    if (shown && !minimized) {
+      dismiss();
+    } else {
+      dismissed = false;
+      showUi(false);
+    }
   }
 
+  // Embedded frames always tell the page's PSA, which decides whether to show itself.
   function startedPlaying() {
+    if (!ext.top) {
+      ext.send({ type: 'started' });
+      return;
+    }
     if (shown || dismissed || saved.autoShow === false) return;
-    if (ext.top) showUi(true);
-    else ext.send({ type: 'started' });
+    showUi(true);
   }
 
   // The toolbar badge shows the speed once the page has something to play.
   function updateBadge() {
-    if (!ext || !ext.top || !mediaList.length) return;
+    if (!ext || !ext.top || (!mediaList.length && !embeddedPlayed)) return;
     badged = true;
     ext.send({ type: 'badge', rate });
   }
@@ -1822,17 +1845,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function onExtensionMessage(message) {
     if (!alive || !message) return;
     if (message.type === 'rate') {
+      if (message.from === copyId) return;
       followRate(Number(message.rate));
       if (badged) updateBadge();
     } else if (message.type === 'toggle') {
       togglePanel();
     } else if (message.type === 'started') {
+      embeddedPlayed = true;
+      if (!badged) updateBadge();
       startedPlaying();
     }
   }
 
+  // The extension: a tab coming back to the front gets a full look at once, since none happen while it is
+  // in the background with nothing to play.
+  function onTabShown() {
+    if (alive && !document.hidden && !shown && !mediaList.length) {
+      discoverRoots();
+      refresh();
+    }
+  }
+
   function onFullscreenChange() {
-    fullscreenSpot = fullscreenElement() ? { x: fullscreenHome.x, y: fullscreenHome.y } : null;
+    const fs = fullscreenElement();
+    fullscreenSpot = fs ? { x: fullscreenHome.x, y: fullscreenHome.y } : null;
+    // The mouse moving over an embedded frame never reaches PSA, so over one it would never come back.
+    fades = !!fs && fs.localName !== 'iframe' && !fs.querySelector('iframe');
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();
@@ -1871,13 +1909,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   function tick() {
     if (!alive) return;
-    if (ext && !shown && !mediaList.length && tickCount % IDLE_EVERY !== 0) {
-      tickCount += 1;
-      return;
-    }
-    const deep = tickCount % DEEP_SCAN_EVERY === 0;
-    if (deep) discoverRoots();
+    const count = tickCount;
     tickCount += 1;
+    let deep = count % DEEP_SCAN_EVERY === 0;
+    // The extension with nothing to play and no panel showing (after the first look, which starts listening
+    // for media): no looking while the tab is in the background, and otherwise less often.
+    if (ext && !shown && !mediaList.length && count > 0) {
+      if (document.hidden || count % IDLE_EVERY !== 0) return;
+      deep = count % IDLE_DEEP_EVERY === 0;
+    }
+    if (deep) discoverRoots();
     mount(deep);
     refresh();
   }
@@ -1900,6 +1941,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     clearTimeout(fadeTimer);
     window.removeEventListener('pagehide', savePositions);
     document.removeEventListener('visibilitychange', savePositions);
+    if (ext) document.removeEventListener('visibilitychange', onTabShown);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
     window.removeEventListener('storage', onStorage);
@@ -1921,24 +1963,41 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       media: mediaList.map((el) => ({ el, title: titleOf(el), locked: locked.has(el), live: isLive(el) })),
     }),
   };
-  if (ext) api.togglePanel = togglePanel;
+  if (ext) {
+    api.togglePanel = togglePanel;
+    // Ends this copy, for a newer one taking over after an update.
+    api.stop = destroy;
+  }
   window[NS] = api;
 
   if (ext) {
     ext.listen(onExtensionMessage);
-    // First visit to this site with the extension: bring over what the bookmarklet saved here.
+    // First visit to this site with the extension: bring over what the bookmarklet saved here, then take it
+    // out of the site's storage so it is brought over only once.
     if (ext.top && ext.fresh) {
       const old = load(STORE_KEY);
-      ['rate', 'pos'].forEach((key) => {
-        if (old[key] !== undefined && saved[key] === undefined) {
-          saved[key] = old[key];
-          save(key, old[key]);
-        }
+      const oldRate = Number(old.rate);
+      if (oldRate > 0) {
+        rate = clampRate(oldRate);
+        save('rate', rate);
+      }
+      ['pos', 'fsPos'].forEach((key) => {
+        const spot = old[key];
+        if (!spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.y)) return;
+        saved[key] = { x: spot.x, y: spot.y };
+        save(key, saved[key]);
       });
-      if (isFinite(Number(old.rate))) rate = clampRate(Number(old.rate));
+      if (saved.fsPos) fullscreenHome = saved.fsPos;
       const oldPositions = load(RESUME_KEY);
       if (Object.keys(oldPositions).length) writePositions((stored) => Object.assign(stored, oldPositions));
+      safely(() => {
+        localStorage.removeItem(STORE_KEY);
+        localStorage.removeItem(RESUME_KEY);
+      });
     }
+    document.addEventListener('visibilitychange', onTabShown);
+  } else {
+    window.addEventListener('storage', onStorage);
   }
 
   window.addEventListener('resize', onResize);
@@ -1948,7 +2007,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   document.addEventListener('visibilitychange', savePositions);
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-  window.addEventListener('storage', onStorage);
 
   tick();
   const start = saved.pos;
