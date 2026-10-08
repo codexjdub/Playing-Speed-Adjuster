@@ -28,7 +28,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.3';
+  const VERSION = '1.7.4';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -864,9 +864,10 @@
   const CSS = `
 :host { all: initial; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.panel, .pill { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 .panel {
-  width: 272px; max-width: calc(100vw - 16px); padding: 4px 10px 10px;
-  font: 13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  width: 272px; max-width: calc(100vw - 16px); padding: 4px 10px 10px; font-size: 13px; line-height: 1.35;
   color: #f5f5f7; background: rgba(28, 28, 30, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -882,7 +883,6 @@
 .brand-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #5ea8ff; }
 .version { font-size: 11px; font-weight: 400; }
 .nav { display: flex; align-items: center; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.nav[hidden] { display: none; }
 .count { min-width: 30px; text-align: center; opacity: 0.8; }
 button {
   font: inherit; color: inherit; margin: 0; border: 0; border-radius: 7px; cursor: pointer;
@@ -899,13 +899,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   position: relative; display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px;
 }
 .pip { position: absolute; right: 0; top: 50%; margin-top: -12px; }
-.pip[hidden] { display: none; }
 .resume {
   display: block; width: 100%; height: 30px; margin: -2px 0 10px; padding: 0 8px;
   background: #5ea8ff; color: #0b1b2e; font-weight: 600;
 }
 .resume:hover { background: #7db9ff; }
-.resume[hidden] { display: none; }
 .skip { flex: none; width: 58px; height: 34px; padding: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .play {
   flex: none; width: 40px; height: 40px; padding: 0; border-radius: 50%;
@@ -932,22 +930,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   font-family: inherit; border: 0; border-radius: 7px; outline: none;
   background: #f5f5f7; color: #1c1c1e; -webkit-user-select: text; user-select: text;
 }
-.readout[hidden], .entry[hidden] { display: none; }
 .presets { display: flex; gap: 4px; }
 .presets button { flex: 1; min-width: 0; height: 26px; padding: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
 .presets button[aria-pressed="true"] { background: #5ea8ff; color: #0b1b2e; font-weight: 600; }
 .note { margin-top: 8px; font-size: 11px; color: #ffd28a; }
-.note[hidden] { display: none; }
-.panel[hidden] { display: none; }
 .pill {
   position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 4px 5px 4px 11px;
-  border-radius: 999px; font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.2;
   color: #f5f5f7; background: rgba(28, 28, 30, 0.96); border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45); cursor: grab; touch-action: none;
   -webkit-user-select: none; user-select: none; white-space: nowrap;
 }
 .pill:active { cursor: grabbing; }
-.pill[hidden] { display: none; }
 .pill-name {
   display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; border-radius: 6px;
   font-size: 12px; color: rgba(245, 245, 247, 0.75);
@@ -965,7 +959,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 .pill-menu.up { top: auto; bottom: calc(100% + 6px); }
-.pill-menu[hidden] { display: none; }
 .pill .pill-menu button { width: 100%; height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; font-variant-numeric: tabular-nums; }
 .pill .pill-menu button[aria-checked="true"] { background: #5ea8ff; color: #0b1b2e; }
 .pill.pulse .pill-dot { animation: dot-pulse 0.9s ease-out 2; }
@@ -987,7 +980,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   box-shadow: 0 0 0 4px rgba(94, 168, 255, 0.35), 0 0 24px rgba(94, 168, 255, 0.5);
   animation: glow-in 0.15s ease-out;
 }
-.glow[hidden] { display: none; }
 @keyframes glow-in { from { opacity: 0; } to { opacity: 1; } }
 `;
 
@@ -1128,12 +1120,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     button('step', '+', 'Faster', () => setRate(rate + STEP))
   );
 
+  // The common speeds as buttons: the panel's preset row and the pill's menu. render() marks the current
+  // one with `state` (aria-pressed on the presets, aria-checked on the menu's items).
+  const speedLists = [];
+  function speedList(container, state, makeNode, after) {
+    const items = PRESETS.map((value) => {
+      const node = makeNode(value, () => {
+        setRate(value);
+        if (after) after();
+      });
+      container.append(node);
+      return { node, value };
+    });
+    speedLists.push({ items, state });
+  }
+
   const presetRow = make('div', 'presets');
-  ui.presets = PRESETS.map((value) => {
-    const node = button('', String(value), value + '× speed', () => setRate(value));
-    presetRow.append(node);
-    return { node, value };
-  });
+  speedList(presetRow, 'aria-pressed', (value, choose) => button('', String(value), value + '× speed', choose));
 
   ui.note = make('div', 'note');
   ui.note.hidden = true;
@@ -1165,15 +1168,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.pillMenu = make('div', 'pill-menu');
   ui.pillMenu.setAttribute('role', 'menu');
   ui.pillMenu.hidden = true;
-  ui.pillChoices = PRESETS.map((value) => {
-    const node = button('', value + '×', null, () => {
-      setRate(value);
-      closePillMenu();
-    });
-    node.setAttribute('role', 'menuitemradio');
-    ui.pillMenu.append(node);
-    return { node, value };
-  });
+  speedList(
+    ui.pillMenu,
+    'aria-checked',
+    (value, choose) => {
+      const node = button('', value + '×', null, choose);
+      node.setAttribute('role', 'menuitemradio');
+      return node;
+    },
+    () => closePillMenu()
+  );
   ui.pill.append(
     ui.pillName,
     button('pill-step', '−', 'Slower by ' + KEY_STEP, () => setRate(rate - KEY_STEP)),
@@ -1358,14 +1362,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     setText(ui.pillRateText, formatRate(rate));
     const pillLabel = 'Speed ' + formatRate(rate) + ': choose another';
     if (ui.pillRate.getAttribute('aria-label') !== pillLabel) ui.pillRate.setAttribute('aria-label', pillLabel);
-    ui.pillChoices.forEach(({ node, value }) => {
-      const checked = String(sameRate(value, rate));
-      if (node.getAttribute('aria-checked') !== checked) node.setAttribute('aria-checked', checked);
-    });
-    ui.presets.forEach(({ node, value }) => {
-      const pressed = String(sameRate(value, rate));
-      if (node.getAttribute('aria-pressed') !== pressed) node.setAttribute('aria-pressed', pressed);
-    });
+    speedLists.forEach(({ items, state }) =>
+      items.forEach(({ node, value }) => {
+        const current = String(sameRate(value, rate));
+        if (node.getAttribute(state) !== current) node.setAttribute(state, current);
+      })
+    );
   }
 
   // ---- Actions ----------------------------------------------------------------------------------

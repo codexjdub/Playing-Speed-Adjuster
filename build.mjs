@@ -31,13 +31,14 @@ const prepared = source.replace(/const CSS = `([^`]*)`;/, (all, css) => 'const C
 
 // Renames the bookmarklet's internal names, removes whitespace and shortens syntax. Text and property
 // names are untouched, so saved settings and window.__speedCtl stay the same. play() keeps its name
-// because it replaces HTMLMediaElement.prototype.play while the panel is open.
+// because it replaces HTMLMediaElement.prototype.play while the panel is open. Strings use single quotes,
+// which a javascript: URL carries as they are, where each double quote would cost three characters (%22).
 // __PSA_EXTENSION__ is only defined inside the Firefox extension, so the bookmarklet drops that code.
 const minified = await minify(prepared, {
   ecma: 2020,
-  compress: { passes: 2, keep_fnames: /^play$/, global_defs: { __PSA_EXTENSION__: null } },
+  compress: { passes: 3, keep_fnames: /^play$/, global_defs: { __PSA_EXTENSION__: null } },
   mangle: { keep_fnames: /^play$/ },
-  format: { comments: false },
+  format: { comments: false, quote_style: 1 },
 });
 // Ending on `void 0` guarantees the javascript: URL evaluates to undefined; a string result would replace the page.
 const code = minified.code.replace(/;?$/, ';void 0;');
