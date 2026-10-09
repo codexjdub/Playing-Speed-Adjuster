@@ -52,11 +52,13 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let driver = null;
 try {
   const options = new firefox.Options()
-    // System access lets the test open the extension's settings page in a tab of its own (see below).
-    .addArguments('-headless', '-remote-allow-system-access')
+    .addArguments('-headless')
     .setPreference('media.autoplay.default', 0)
     .setPreference('extensions.webextensions.uuids', JSON.stringify({ 'psa@codexjdub.github.io': extensionUuid }));
-  driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).build();
+  // System access, which geckodriver grants only when asked, lets the test open the extension's settings page
+  // in a tab of its own (see below).
+  const service = new firefox.ServiceBuilder().addArguments('--allow-system-access');
+  driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).setFirefoxService(service).build();
   const run = (script) => driver.executeScript(script);
   // Polls a script until it returns something truthy, or gives up and returns the last value.
   const until = async (script, ms = 8000) => {
