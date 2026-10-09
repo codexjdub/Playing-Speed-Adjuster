@@ -24,9 +24,15 @@
   <!-- The page's own PSA looks after this one; it must not start a copy of its own. -->
   <iframe id="same" title="Same-site player" srcdoc="<!doctype html><meta charset='utf-8'><p>Same-site episode</p><audio id='inner' controls></audio><script>document.getElementById('inner').src = parent.beepUrl(550, 60);</script>"></iframe>
   <script>
-    document.getElementById('episode').src = beepUrl(330, 60);
-    const frame = new URLSearchParams(location.search).get('frame');
-    document.getElementById('embed').src = frame || 'extension-frame.html';
+    const params = new URLSearchParams(location.search);
+    // ?embed-only: no player of the page's own, only the one embedded from another site.
+    if (params.has('embed-only')) {
+      document.getElementById('episode').remove();
+      document.getElementById('same').remove();
+    } else {
+      document.getElementById('episode').src = beepUrl(330, 60);
+    }
+    document.getElementById('embed').src = params.get('frame') || 'extension-frame.html';
   </script>
 </body>
 </html>

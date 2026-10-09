@@ -7,7 +7,9 @@
 // bookmarklet saved on the site, shows the pill when something plays here or in an embedded player, that a
 // real ] key press speeds up the page, a player embedded from another origin and one in a same-site frame
 // (without a second PSA there), that a late copy of its own speed change is ignored, that the speed is
-// remembered after a reload, and how the toolbar's toggle (togglePanel) shows and hides PSA.
+// remembered after a reload, how the toolbar's toggle (togglePanel) shows and hides PSA, that the panel names
+// a page's only player when it is embedded from another site, and that the settings page lists this site with
+// its speed and forgets just it.
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,6 +24,8 @@ const port = 8767;
 // The page and its embedded player come from different origins: 127.0.0.1 and localhost.
 const frameUrl = `http://localhost:${port}/test/extension-frame.html`;
 const pageUrl = `http://127.0.0.1:${port}/test/extension.html?frame=` + encodeURIComponent(frameUrl);
+// A fixed address for the extension's own pages (Firefox picks a random one otherwise), to open its settings.
+const extensionUuid = '6d1f5f7e-3c2b-4a59-9e1d-7b8c2a4f0e31';
 
 const server = spawn(process.execPath, ['test/serve.mjs'], {
   cwd: root,
@@ -47,7 +51,10 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let driver = null;
 try {
-  const options = new firefox.Options().addArguments('-headless').setPreference('media.autoplay.default', 0);
+  const options = new firefox.Options()
+    .addArguments('-headless')
+    .setPreference('media.autoplay.default', 0)
+    .setPreference('extensions.webextensions.uuids', JSON.stringify({ 'psa@codexjdub.github.io': extensionUuid }));
   driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).build();
   const run = (script) => driver.executeScript(script);
   // Polls a script until it returns something truthy, or gives up and returns the last value.
@@ -150,6 +157,39 @@ try {
     'window.__speedCtl.togglePanel(); const p = document.querySelector("speed-ctl").shadowRoot.querySelector(".panel"); const ok = window.__speedCtl.inspect().shown && !p.classList.contains("faded"); delete document.fullscreenElement; document.dispatchEvent(new Event("fullscreenchange")); return ok;'
   );
   check(visible, 'shown in fullscreen after fading while hidden, it is visible');
+
+  // A page whose only player is embedded from another site: the panel names that site, and ] on the page
+  // still reaches the player.
+  await driver.get(pageUrl + '&embed-only');
+  await until('return !!window.__speedCtl');
+  await inFrame('if (!window.__speedCtl) return false; const a = document.getElementById("embedded"); a.muted = true; a.play(); return true;');
+  await until('return window.__speedCtl.inspect().shown');
+  await run('window.__speedCtl.togglePanel();');
+  const named = await until(
+    'const s = document.querySelector("speed-ctl").shadowRoot; return s.querySelector(".title").textContent + " / " + s.querySelector(".sub").textContent;'
+  );
+  check(
+    named === 'Embedded player from localhost / Speed follows PSA · play and skip in the player itself',
+    "the panel names a page's only player, embedded from another site",
+    named
+  );
+  await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
+  await driver.actions().sendKeys(']').perform();
+  const embedOnlyRate = await inFrame('const r = document.getElementById("embedded").playbackRate; return Math.abs(r - 1.8) < 0.005 && r');
+  check(!!embedOnlyRate, '] on that page speeds up the embedded player to 1.8×');
+
+  // The settings page lists this site with its speed, and forgets just it.
+  await driver.get(`moz-extension://${extensionUuid}/options.html`);
+  const site = '127.0.0.1:8767';
+  const findRow = `return [...document.querySelectorAll("#sites li")].find((li) => li.textContent.includes("http://${site}"))`;
+  const listed = await until(findRow + '?.textContent || null');
+  check(!!listed && listed.includes('1.80×'), 'the settings page lists this site with its speed', listed);
+  await run(findRow + '?.querySelector("button").click()');
+  const gone = await until(findRow + ' ? null : true');
+  check(!!gone, 'Forget on the settings page removes just that site');
+  await driver.get(pageUrl);
+  const reset = await until('return !!window.__speedCtl && window.__speedCtl.inspect().rate === 1');
+  check(!!reset, 'a forgotten site is back to the default speed', await run('return window.__speedCtl && window.__speedCtl.inspect().rate'));
 } catch (err) {
   check(false, 'the run stopped', err.message.split('\n')[0]);
 } finally {

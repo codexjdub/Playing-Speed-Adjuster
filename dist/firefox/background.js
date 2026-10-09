@@ -129,9 +129,16 @@ const handlers = {
     });
   },
 
-  // Something started playing in an embedded frame: the page's own PSA shows its pill.
+  // Something started playing in an embedded frame: the page's own PSA shows its pill, and names the frame's
+  // site in its panel when the page has no player of its own.
   async started(message, sender) {
-    browser.tabs.sendMessage(sender.tab.id, { type: 'started' }, { frameId: 0 }).catch(() => {});
+    let site = '';
+    try {
+      site = new URL(sender.url).hostname.replace(/^www\./, '');
+    } catch (err) {
+      site = '';
+    }
+    browser.tabs.sendMessage(sender.tab.id, { type: 'started', site }, { frameId: 0 }).catch(() => {});
   },
 
   async badge(message, sender) {

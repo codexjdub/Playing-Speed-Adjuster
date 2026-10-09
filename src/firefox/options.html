@@ -11,7 +11,7 @@
   }
   body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   fieldset { border: 0; padding: 0; margin: 0 0 18px; }
-  legend, label.title { font-weight: 600; display: block; margin-bottom: 4px; }
+  legend, .title { font-weight: 600; display: block; margin: 0 0 4px; font-size: inherit; }
   .hint { color: var(--muted); margin: 2px 0 0; font-size: 13px; }
   input[type="number"] { width: 6em; }
   input, textarea, button { font: inherit; }
@@ -19,6 +19,13 @@
   label.check { display: flex; gap: 8px; align-items: baseline; }
   button { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
   #status { color: var(--muted); margin-left: 8px; }
+  .sites { list-style: none; margin: 8px 0 12px; padding: 0; max-width: 460px; }
+  .sites li { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .sites li:last-child { border-bottom: 1px solid var(--line); }
+  .sites .site { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .sites .detail { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .sites button { padding: 3px 10px; font-size: 13px; }
+  .sites .empty { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -38,6 +45,11 @@
       <p class="hint">One per line, as a name like the one above or a page's address. A site includes its subdomains. Reload a page for a change to apply there.</p>
     </fieldset>
   </form>
+  <section aria-labelledby="saved-title">
+    <h2 id="saved-title" class="title">Saved sites</h2>
+    <p class="hint">Each site's speed and the places saved in its recordings. A tab that is already open keeps them until it is reloaded.</p>
+    <ul id="sites" class="sites"></ul>
+  </section>
   <p>
     <button id="forget" type="button">Forget saved speeds and places</button>
     <span id="status" role="status"></span>

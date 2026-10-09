@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.7';
+  const VERSION = '1.8.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -554,7 +554,7 @@
   function onKey(event) {
     // The extension runs everywhere, so it leaves [ ] \ alone on pages without media (here or in an embedded
     // player), or when switched off.
-    if (ext && (saved.shortcuts === false || (!mediaList.length && !embeddedPlayed))) return;
+    if (ext && (saved.shortcuts === false || (!mediaList.length && !embeddedFrom))) return;
     const key = KEYS[event.key];
     // ⌘ and Ctrl belong to the browser (⌘[ is Back); AltGr, which reports Ctrl+Alt, still types [ ] \ on some layouts.
     if (!alive || !key || event.defaultPrevented || event.metaKey || (event.ctrlKey && !event.altKey)) return;
@@ -1331,9 +1331,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       // The line is cut short when it doesn't fit; hovering shows all of it.
       if (ui.sub.title !== status) ui.sub.title = status;
     } else {
-      setText(ui.title, 'No audio or video found yet');
+      // The extension reaches a player embedded from another site only to set its speed.
+      setText(ui.title, ext && embeddedFrom ? 'Embedded player from ' + embeddedFrom : 'No audio or video found yet');
       ui.title.title = '';
-      setText(ui.sub, 'Waiting for the page to add a player…');
+      setText(
+        ui.sub,
+        ext && embeddedFrom ? 'Speed follows PSA · play and skip in the player itself' : 'Waiting for the page to add a player…'
+      );
       ui.sub.title = '';
     }
     const playing = !!el && !el.paused && !el.ended;
@@ -1799,7 +1803,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   let shown = !ext;
   let dismissed = false;
   let badged = false;
-  let embeddedPlayed = false; // a player embedded from another site has played on this page
+  let embeddedFrom = ''; // the site of a player embedded from elsewhere that has played on this page
 
   function showUi(min) {
     if (!ext || !ext.top) return;
@@ -1848,7 +1852,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   // The toolbar badge shows the speed once the page has something to play.
   function updateBadge() {
-    if (!ext || !ext.top || (!mediaList.length && !embeddedPlayed)) return;
+    if (!ext || !ext.top || (!mediaList.length && !embeddedFrom)) return;
     badged = true;
     ext.send({ type: 'badge', rate });
   }
@@ -1862,7 +1866,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     } else if (message.type === 'toggle') {
       togglePanel();
     } else if (message.type === 'started') {
-      embeddedPlayed = true;
+      embeddedFrom = typeof message.site === 'string' && message.site ? message.site.slice(0, 100) : 'another site';
       if (!badged) updateBadge();
       startedPlaying();
     }
