@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.5';
+  const VERSION = '1.7.6';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1869,8 +1869,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function onFullscreenChange() {
     const fs = fullscreenElement();
     fullscreenSpot = fs ? { x: fullscreenHome.x, y: fullscreenHome.y } : null;
-    // The mouse moving over an embedded frame never reaches PSA, so over one it would never come back.
-    fades = !!fs && fs.localName !== 'iframe' && !fs.querySelector('iframe');
+    // The mouse moving over an embedded frame never reaches PSA, so over one it would never come back. Only a
+    // frame showing on a quarter of the screen or more counts: YouTube's fullscreen page holds hidden ones.
+    const view = viewport();
+    const large = (frame) => {
+      const r = frame.getBoundingClientRect();
+      return r.width * r.height >= (view.width * view.height) / 4;
+    };
+    fades = !!fs && fs.localName !== 'iframe' && !Array.from(fs.querySelectorAll('iframe')).some(large);
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();

@@ -120,6 +120,8 @@
       <video controls title="Fullscreen box video" data-tone="523" data-expect="Fullscreen box video"></video>
       <p>The panel should stay visible when this box is fullscreen.</p>
       <button id="fs" type="button">Make this box fullscreen</button>
+      <!-- A hidden frame, as YouTube's fullscreen page has: PSA still fades. -->
+      <iframe title="Hidden frame" style="width: 0; height: 0; border: 0"></iframe>
     </div>
   </section>
 
@@ -617,7 +619,7 @@
         inFullscreen + ' (expected ' + expectedStart + '), then ' + afterExit);
       check(dragged !== inFullscreen && again === dragged && !!JSON.parse(localStorage.getItem('speedCtl.v1')).fsPos,
         'where it is dragged in fullscreen is remembered for next time', dragged + ', next time ' + again);
-      check(faded && woke, 'in fullscreen it fades away when the mouse is still, and comes back when it moves',
+      check(faded && woke, 'in fullscreen it fades away when the mouse is still (a hidden frame inside, as on YouTube, makes no difference), and comes back when it moves',
         'faded ' + faded + ', back ' + woke);
       check(compact && grows && fullAgain, 'in fullscreen the pill shrinks to the dot and the speed, and grows back on focus',
         'compact ' + compact + ', grows ' + grows + ', full after ' + fullAgain);
