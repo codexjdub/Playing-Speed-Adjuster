@@ -18,7 +18,7 @@
   "icons": { "48": "icon.svg", "96": "icon.svg" },
   "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
-  "background": { "scripts": ["background.js"] },
+  "background": { "scripts": ["defaults.js", "background.js"] },
   "action": {
     "default_title": "Show or hide the PSA panel",
     "default_icon": "icon.svg"

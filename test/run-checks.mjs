@@ -139,6 +139,11 @@ try {
     if (reached.top === 'speed-ctl' && reached.hover) pass(reachName);
     else fail(reachName + ' — ' + JSON.stringify(reached));
     await page.evaluate(() => document.exitFullscreen()).catch(() => {});
+    await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const backOut = await page.evaluate(() => document.querySelector('speed-ctl').parentNode === document.documentElement);
+    if (backOut) pass('after real fullscreen PSA is back outside the player');
+    else fail('after real fullscreen PSA is back outside the player — still inside the fullscreen element');
     await page.mouse.move(5, 715);
   }
 

@@ -15,7 +15,29 @@ try {
   parentIsSameSite = false;
 }
 
-if (!parentIsSameSite) {
+// Instead, this frame's document goes straight to that PSA (the nearest frame above that runs one), which
+// would otherwise find it only on its next full look, or never inside a closed shadow root. If that PSA
+// hasn't started yet, this tries again for a few seconds.
+function handOver(triesLeft) {
+  for (let win = window.parent; ; win = win.parent) {
+    let psa = null;
+    try {
+      psa = win.__speedCtl;
+    } catch (err) {
+      return;
+    }
+    if (psa && typeof psa.adopt === 'function') {
+      psa.adopt(document);
+      return;
+    }
+    if (win === win.parent) break;
+  }
+  if (triesLeft > 0) setTimeout(() => handOver(triesLeft - 1), 1000);
+}
+
+if (parentIsSameSite) {
+  handOver(10);
+} else {
   document.addEventListener('psa:to-page', (event) => {
     let message = null;
     try {

@@ -7,9 +7,10 @@
 // bookmarklet saved on the site, shows the pill when something plays here or in an embedded player, that a
 // real ] key press speeds up the page, a player embedded from another origin and one in a same-site frame
 // (without a second PSA there), that a late copy of its own speed change is ignored, that the speed is
-// remembered after a reload, how the toolbar's toggle (togglePanel) shows and hides PSA, that the panel names
-// a page's only player when it is embedded from another site, and that the settings page lists this site with
-// its speed and forgets just it.
+// remembered after a reload, how the toolbar's toggle (togglePanel) shows and hides PSA, that a same-site
+// player frame added later is looked after at once, that muted playing doesn't pop up the pill, that the panel
+// names a page's only player when it is embedded from another site (until the address changes), and that the
+// settings page lists this site with its speed and forgets just it.
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -97,7 +98,8 @@ try {
   check(!!migrated, "the bookmarklet's saved speed is brought over once, then removed from the site's storage",
     await run('return [window.__speedCtl && window.__speedCtl.inspect().rate, localStorage.getItem("speedCtl.v1")].join(" ")'));
 
-  await run('const a = document.getElementById("episode"); a.muted = true; return a.play().then(() => "ok", (e) => e.name)');
+  // Played with sound: muted playing (how ads autoplay) doesn't count as starting.
+  await run('const a = document.getElementById("episode"); return a.play().then(() => "ok", (e) => e.name)');
   const pill = await until(
     'const s = document.querySelector("speed-ctl"); return !!s && !s.shadowRoot.querySelector(".pill").hidden && s.shadowRoot.querySelector(".panel").hidden'
   );
@@ -136,7 +138,7 @@ try {
   check(!!remembered, 'the speed is remembered after a reload', await run('return window.__speedCtl && window.__speedCtl.inspect().rate'));
 
   // Through the background to the page's frame, the same way as the toolbar button's message.
-  await inFrame('if (!window.__speedCtl) return false; const a = document.getElementById("embedded"); a.muted = true; a.play(); return true;');
+  await inFrame('if (!window.__speedCtl) return false; document.getElementById("embedded").play(); return true;');
   const embeddedPill = await until('const i = window.__speedCtl.inspect(); return i.shown && i.minimized');
   check(!!embeddedPill, 'a player in an embedded frame starting shows the page\'s pill');
 
@@ -146,7 +148,7 @@ try {
   check(!!panel, "togglePanel (the toolbar button's action) opens the full panel");
 
   // Hidden with the toolbar button, PSA stays hidden when something plays, as after ×.
-  await run('window.__speedCtl.togglePanel(); const a = document.getElementById("episode"); a.muted = true; a.play();');
+  await run('window.__speedCtl.togglePanel(); document.getElementById("episode").play();');
   await wait(1000);
   const stayedHidden = await run('return window.__speedCtl.inspect().shown === false && !document.getElementById("episode").paused');
   check(stayedHidden, 'hidden with the toolbar button, it stays hidden when something plays');
@@ -161,12 +163,34 @@ try {
   );
   check(visible, 'shown in fullscreen after fading while hidden, it is visible');
 
-  // A page whose only player is embedded from another site: the panel names that site, and ] on the page
-  // still reaches the player.
+  // A player in a frame from this site, added later to a page with nothing playing: the frame hands itself to
+  // the page's PSA, so it gets the speed and the pill at once (a full look comes only every 30 s there).
+  await driver.get(pageUrl + '&embed-only');
+  await until('return !!window.__speedCtl');
+  const siteRate = await run('return window.__speedCtl.inspect().rate');
+  await run('const f = document.createElement("iframe"); f.id = "late"; f.srcdoc = "<p>Late player</p>"; document.body.append(f);');
+  await until('const f = document.getElementById("late"); return !!f.contentDocument && f.contentDocument.readyState === "complete" && !!f.contentDocument.body');
+  await run(
+    'const d = document.getElementById("late").contentDocument; const a = d.createElement("audio"); a.id = "late-audio"; d.body.append(a); a.src = beepUrl(660, 60); a.play();'
+  );
+  const late = await until(
+    `const a = document.getElementById("late").contentDocument.getElementById("late-audio"); return Math.abs(a.playbackRate - ${siteRate}) < 0.005 && !a.paused && window.__speedCtl.inspect().shown`,
+    2500
+  );
+  check(!!late, "a player in a same-site frame added later gets the page's speed and the pill at once",
+    await run('const a = document.getElementById("late").contentDocument.getElementById("late-audio"); return [a.playbackRate, a.paused, window.__speedCtl.inspect().shown].join(" ")'));
+
+  // A page whose only player is embedded from another site: muted playing doesn't pop up the pill, unmuting
+  // does, the panel names that site, ] on the page still reaches the player, and a new address forgets it.
   await driver.get(pageUrl + '&embed-only');
   await until('return !!window.__speedCtl');
   await inFrame('if (!window.__speedCtl) return false; const a = document.getElementById("embedded"); a.muted = true; a.play(); return true;');
-  await until('return window.__speedCtl.inspect().shown');
+  await wait(1500);
+  const quiet = await run('return window.__speedCtl.inspect().shown === false');
+  check(quiet, "a muted player in an embedded frame (as ads autoplay) doesn't pop up the pill");
+  await inFrame('const a = document.getElementById("embedded"); a.muted = false; return !a.paused;');
+  const unmuted = await until('return window.__speedCtl.inspect().shown');
+  check(!!unmuted, 'unmuting it shows the pill');
   await run('window.__speedCtl.togglePanel();');
   const named = await until(
     'const s = document.querySelector("speed-ctl").shadowRoot; return s.querySelector(".title").textContent + " / " + s.querySelector(".sub").textContent;'
@@ -178,11 +202,18 @@ try {
   );
   await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
   await driver.actions().sendKeys(']').perform();
-  const embedOnlyRate = await inFrame('const r = document.getElementById("embedded").playbackRate; return Math.abs(r - 1.8) < 0.005 && r');
-  check(!!embedOnlyRate, '] on that page speeds up the embedded player to 1.8×');
+  const faster = Math.round((siteRate + 0.1) * 100) / 100;
+  const embedOnlyRate = await inFrame(`const r = document.getElementById("embedded").playbackRate; return Math.abs(r - ${faster}) < 0.005 && r`);
+  check(!!embedOnlyRate, '] on that page speeds up the embedded player to ' + faster + '×');
+  await run('history.pushState(null, "", location.href + "&moved");');
+  const forgotten = await until(
+    'return document.querySelector("speed-ctl").shadowRoot.querySelector(".title").textContent === "No audio or video found yet"'
+  );
+  check(!!forgotten, 'after the page changes its address, the panel no longer names the embedded player');
 
   // The settings page lists this site with its speed, and forgets just it. A web page can't navigate to the
   // extension's pages, so it opens in a new tab from Firefox's own side, as the toolbar menu would.
+  const savedRate = await run('return window.__speedCtl.inspect().rate');
   const pageTab = await driver.getWindowHandle();
   await driver.setContext(firefox.Context.CHROME);
   try {
@@ -195,7 +226,7 @@ try {
   const site = '127.0.0.1:8767';
   const findRow = `return [...document.querySelectorAll("#sites li")].find((li) => li.textContent.includes("http://${site}"))`;
   const listed = await until(findRow + '?.textContent || null');
-  check(!!listed && listed.includes('1.80×'), 'the settings page lists this site with its speed', listed);
+  check(!!listed && listed.includes(savedRate.toFixed(2) + '×'), 'the settings page lists this site with its speed', listed);
   await run(findRow + '?.querySelector("button").click()');
   const gone = await until(findRow + ' ? null : true');
   check(!!gone, 'Forget on the settings page removes just that site');

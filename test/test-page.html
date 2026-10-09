@@ -582,6 +582,9 @@
       };
       const savedSpot = JSON.parse(localStorage.getItem('speedCtl.v1')).fsPos;
       const expectedStart = savedSpot ? savedSpot.x + ',' + savedSpot.y : '16,16';
+      // The pointer counts as on the page, not over an embedded frame (a real mouse may have ended up over one).
+      const pointerOver = (node) => node.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, composed: true }));
+      pointerOver(fsBox);
       await fullscreen(true);
       const inFullscreen = hostAt();
       const pillBox = pill.getBoundingClientRect();
@@ -615,6 +618,37 @@
       const fadedOverFrame = pill.classList.contains('faded');
       await fullscreen(false);
       check(!fadedOverFrame, "over a fullscreen embedded frame it doesn't fade, since it can't see the mouse there");
+
+      // PSA moves inside the fullscreen element, where Chrome lets the mouse reach it. While the mouse is over an
+      // embedded frame in there (the page sees it go over the frame, then nothing), it doesn't fade.
+      const psaHost = document.querySelector('speed-ctl');
+      await fullscreen(true);
+      const insideBox = psaHost.parentNode === fsBox;
+      pointerOver(fsBox.querySelector('iframe'));
+      await wait(3400);
+      const awakeInFrame = !pill.classList.contains('faded');
+      pointerOver(fsBox.querySelector('video'));
+      document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+      await wait(3400);
+      const fadedAfterFrame = pill.classList.contains('faded');
+      await fullscreen(false);
+      const backOut = psaHost.parentNode === document.documentElement;
+      check(insideBox && backOut, 'in fullscreen PSA moves inside the fullscreen element, and back out after',
+        'inside ' + insideBox + ', back out ' + backOut);
+      check(awakeInFrame && fadedAfterFrame, "while the mouse is over an embedded frame it doesn't fade, and it does once the mouse is back on the page",
+        'awake in frame ' + awakeInFrame + ', faded after ' + fadedAfterFrame);
+      // A fullscreen element hosting a closed shadow root shows only what that shadow tree places, so PSA stays
+      // outside it, still showing.
+      const closedBox = document.createElement('div');
+      closedBox.attachShadow({ mode: 'closed' }).append('Closed player');
+      document.body.append(closedBox);
+      await fullscreen(true, closedBox);
+      const closedParent = psaHost.parentNode === closedBox ? 'the closed host' : psaHost.parentNode.localName;
+      const outsideClosed = psaHost.parentNode !== closedBox && psaHost.getClientRects().length > 0;
+      await fullscreen(false);
+      closedBox.remove();
+      check(outsideClosed, 'over a fullscreen element with a closed shadow root, PSA stays outside it and showing',
+        'in ' + closedParent);
       check(inFullscreen === expectedStart && afterExit === placeBefore, 'in fullscreen PSA uses its fullscreen spot, and goes back after',
         inFullscreen + ' (expected ' + expectedStart + '), then ' + afterExit);
       check(dragged !== inFullscreen && again === dragged && !!JSON.parse(localStorage.getItem('speedCtl.v1')).fsPos,

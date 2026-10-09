@@ -9,7 +9,7 @@
 // A page can only reach its own site's values, and frames embedded from other sites only the speed.
 // Private windows leave nothing behind: they read the saved values, but their changes aren't saved.
 
-const DEFAULT_OPTIONS = { defaultRate: 1, shortcuts: true, autoShow: true, excluded: '' };
+// DEFAULT_OPTIONS comes from defaults.js, loaded first.
 const RESUME_KEEP = 100;
 const NAME_LIMIT = 2000; // characters in a saved place's name ("<page> <length>")
 

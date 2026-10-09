@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.8.0';
+  const VERSION = '1.8.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -77,6 +77,7 @@
     'emptied',
     'enterpictureinpicture',
     'leavepictureinpicture',
+    'volumechange',
   ];
   const TOP_LAYER_EVENTS = ['toggle', 'close'];
   // The extension runs on every page; on one without media and without its panel showing, it looks only
@@ -447,7 +448,7 @@
     } else if (event.type === 'play') {
       markStarted(el);
       applyRate(el);
-      if (ext) startedPlaying();
+      if (ext) noteStart(el);
       // Tied to this page even if a single-page site changes its address while it plays.
       if (!pageOf.has(el)) pageOf.set(el, pageAddress(el));
     } else if (event.type === 'loadstart' || event.type === 'emptied') {
@@ -461,8 +462,12 @@
       applyRate(el);
     } else if (event.type === 'playing' || event.type === 'loadedmetadata') {
       applyRate(el);
+    } else if (event.type === 'volumechange') {
+      // Unmuted while playing: that counts as starting (the extension).
+      if (ext) noteStart(el);
     } else if (event.type === 'pause' || event.type === 'ended') {
       notePosition(el, true);
+      if (ext) heard.delete(el);
     }
     scheduleRefresh();
   }
@@ -593,6 +598,13 @@
       walk(document);
     } catch (err) {
       // Keep whatever was found before the failure.
+    }
+    // Frames from this site that handed themselves over (the extension), while they are still there.
+    if (ext) {
+      adopted.forEach((doc) => {
+        if (doc.defaultView) found.add(doc);
+        else adopted.delete(doc);
+      });
     }
     found.forEach(attachRoot);
     roots.forEach((undo, root) => {
@@ -1631,7 +1643,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       ? { x: savedFullscreen.x, y: savedFullscreen.y }
       : { x: FULLSCREEN_SPOT.x, y: FULLSCREEN_SPOT.y };
   let fullscreenSpot = null; // set while something is fullscreen
-  let fades = false; // fullscreen, and PSA can see the mouse move there
+  let fades = false; // fullscreen, and not an embedded frame itself, where PSA could never see the mouse
   let fadeTimer = 0;
 
   function placeHost() {
@@ -1640,8 +1652,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   // In fullscreen PSA fades away after IDLE_FADE_MS without the mouse moving, and comes back when the mouse
-  // moves or the speed changes. It stays while the pointer is on it, its menu or speed box is open, or it
-  // has keyboard focus. While faded it lets clicks through to the video.
+  // moves or the speed changes. It stays while the pointer is on it or in an embedded frame (whose mouse moves
+  // the page can't see), its menu or speed box is open, or it has keyboard focus. While faded it lets clicks
+  // through to the video.
   function wake() {
     clearTimeout(fadeTimer);
     setFaded(false);
@@ -1650,7 +1663,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   function fadeIfIdle() {
     if (!alive || !fades) return;
-    const busy = drag || !ui.pillMenu.hidden || !ui.entry.hidden || shadow.activeElement || host.matches(':hover');
+    const busy =
+      drag || pointerInFrame || !ui.pillMenu.hidden || !ui.entry.hidden || shadow.activeElement || host.matches(':hover');
     if (busy) wake();
     else setFaded(true);
   }
@@ -1668,6 +1682,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   function onPointerMove() {
     if (fades) wake();
+  }
+
+  // The page sees the pointer go over an embedded frame (as over any element, also inside shadow roots) but
+  // none of its moves in there, until it comes back over the page.
+  let pointerInFrame = false;
+  function onPointerOver(event) {
+    const node = typeof event.composedPath === 'function' ? event.composedPath()[0] : event.target;
+    pointerInFrame = !!node && /^(iframe|frame|embed|object)$/i.test(node.localName || '');
   }
 
   // Both the panel's top bar and the minimized pill drag the panel. A press that doesn't move
@@ -1778,13 +1800,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     }
     if (!parent) return;
     // Moving the host also hides the popover, so it is shown again below.
-    if (host.parentNode !== parent) parent.append(host);
+    const moved = host.parentNode !== parent;
+    if (moved) parent.append(host);
     if (!canPopover) return;
     if (raise && isPopoverOpen()) safely(() => host.hidePopover());
     if (!isPopoverOpen()) safely(() => host.showPopover());
     // A shadow host whose shadow tree is closed shows only what that tree places, so there the panel would
-    // vanish: it goes back outside.
-    if (parent === fs && !host.getClientRects().length) {
+    // vanish: it goes back outside. (Checked only on moving in, since it makes the browser lay out the page.)
+    if (moved && parent === fs && !host.getClientRects().length) {
       noRoom.add(fs);
       mount(deep);
     }
@@ -1804,6 +1827,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   let dismissed = false;
   let badged = false;
   let embeddedFrom = ''; // the site of a player embedded from elsewhere that has played on this page
+  let embeddedOn = ''; // the page's address then
 
   function showUi(min) {
     if (!ext || !ext.top) return;
@@ -1840,6 +1864,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     }
   }
 
+  // Something counts as starting when it plays with sound, or a player that is playing is unmuted. Muted
+  // playing doesn't count: browsers let pages autoplay only muted, which is how ads and background loops
+  // play. Speeds apply either way. Also called on every refresh, for players found already playing.
+  const heard = ext ? new WeakSet() : null; // players counted as started since they last paused
+  function noteStart(el) {
+    if (el.paused || el.muted || !(el.volume > 0) || heard.has(el)) return;
+    heard.add(el);
+    startedPlaying();
+  }
+
   // Embedded frames always tell the page's PSA, which decides whether to show itself.
   function startedPlaying() {
     if (!ext.top) {
@@ -1867,9 +1901,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       togglePanel();
     } else if (message.type === 'started') {
       embeddedFrom = typeof message.site === 'string' && message.site ? message.site.slice(0, 100) : 'another site';
+      embeddedOn = pageNow();
       if (!badged) updateBadge();
       startedPlaying();
     }
+  }
+
+  // The page's address without its #fragment. A new one (a single-page site changing pages) forgets the
+  // embedded player; if it is still there, playing it names it again.
+  const pageNow = () => location.href.split('#')[0];
+
+  // A frame from this site hands its document over as it loads (src/firefox/page.js), so its players are
+  // looked after at once, including in frames that a full look can't find, inside closed shadow roots.
+  const adopted = ext ? new Set() : null;
+  function adopt(doc) {
+    if (!alive || !doc || doc.nodeType !== 9 || doc === document || roots.has(doc)) return;
+    adopted.add(doc);
+    attachRoot(doc);
+    scheduleRefresh();
   }
 
   // The extension: a tab coming back to the front gets a full look at once, since none happen while it is
@@ -1884,14 +1933,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function onFullscreenChange() {
     const fs = fullscreenElement();
     fullscreenSpot = fs ? { x: fullscreenHome.x, y: fullscreenHome.y } : null;
-    // The mouse moving over an embedded frame never reaches PSA, so over one it would never come back. Only a
-    // frame showing on a quarter of the screen or more counts: YouTube's fullscreen page holds hidden ones.
-    const view = viewport();
-    const large = (frame) => {
-      const r = frame.getBoundingClientRect();
-      return r.width * r.height >= (view.width * view.height) / 4;
-    };
-    fades = !!fs && fs.localName !== 'iframe' && !Array.from(fs.querySelectorAll('iframe')).some(large);
+    // An embedded frame in fullscreen has the mouse all the time; over frames inside, see onPointerOver.
+    fades = !!fs && fs.localName !== 'iframe';
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();
@@ -1909,7 +1952,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       noteDuration(el);
       applyRate(el);
       if (!el.paused) notePosition(el, false);
+      // Players found already playing count as starting too: one PSA found late, or unmuted unseen.
+      if (ext) noteStart(el);
     });
+    if (ext && embeddedFrom && embeddedOn !== pageNow()) embeddedFrom = '';
     if (ext && !badged) updateBadge();
     render();
   }
@@ -1959,6 +2005,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     window.removeEventListener('resize', onResize);
     window.removeEventListener('pointerdown', onOutsidePress, true);
     window.removeEventListener('pointermove', onPointerMove, true);
+    window.removeEventListener('pointerover', onPointerOver, true);
     clearTimeout(fadeTimer);
     window.removeEventListener('pagehide', savePositions);
     document.removeEventListener('visibilitychange', savePositions);
@@ -1988,6 +2035,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     api.togglePanel = togglePanel;
     // Ends this copy, for a newer one taking over after an update.
     api.stop = destroy;
+    api.adopt = adopt;
   }
   window[NS] = api;
 
@@ -2024,6 +2072,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   window.addEventListener('resize', onResize);
   window.addEventListener('pointerdown', onOutsidePress, true);
   window.addEventListener('pointermove', onPointerMove, true);
+  window.addEventListener('pointerover', onPointerOver, true);
   window.addEventListener('pagehide', savePositions);
   document.addEventListener('visibilitychange', savePositions);
   document.addEventListener('fullscreenchange', onFullscreenChange);

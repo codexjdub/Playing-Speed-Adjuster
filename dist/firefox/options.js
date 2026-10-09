@@ -1,5 +1,5 @@
 // The settings page: saves each change as it is made.
-const DEFAULT_OPTIONS = { defaultRate: 1, shortcuts: true, autoShow: true, excluded: '' };
+// DEFAULT_OPTIONS comes from defaults.js, loaded first.
 const field = (id) => document.getElementById(id);
 const status = field('status');
 
@@ -36,16 +36,23 @@ async function save() {
   show('Saved.');
 }
 
+const isSiteKey = (key) => key.startsWith('site:') || key.startsWith('resume:');
+const originOf = (key) => key.slice(key.indexOf(':') + 1);
+
 async function forget() {
   const everything = await browser.storage.local.get(null);
-  const keys = Object.keys(everything).filter((key) => key.startsWith('site:') || key.startsWith('resume:'));
+  const keys = Object.keys(everything).filter(isSiteKey);
   await browser.storage.local.remove(keys);
-  show('Forgot ' + keys.length + (keys.length === 1 ? ' item.' : ' items.'));
+  const sites = new Set(keys.map(originOf)).size;
+  show('Forgot ' + sites + (sites === 1 ? ' site.' : ' sites.'));
 }
 
 // ---- Saved sites: each site's speed and saved places, with a Forget button for just that site ----------
+// The list keeps its own copy of the site: and resume: entries, updated from each storage change, and is
+// drawn again only when what it shows changes: a playing tab saves its place every few seconds.
 
-const isSiteKey = (key) => key.startsWith('site:') || key.startsWith('resume:');
+const entries = {};
+let drawn = '';
 
 // "https://www.youtube.com" reads as www.youtube.com; other schemes keep theirs, and file: is local files.
 function siteName(origin) {
@@ -65,36 +72,67 @@ async function forgetSite(origin) {
   show('Forgot ' + siteName(origin) + '.');
 }
 
-async function showSites() {
-  const everything = await browser.storage.local.get(null);
-  const origins = new Set(Object.keys(everything).filter(isSiteKey).map((key) => key.slice(key.indexOf(':') + 1)));
-  const list = field('sites');
-  const rows = [...origins]
-    .map((origin) => ({ origin, name: siteName(origin) }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(({ origin, name }) => {
-      const values = everything['site:' + origin] || {};
-      const places = Object.keys(everything['resume:' + origin] || {}).length;
+function siteRows() {
+  return [...new Set(Object.keys(entries).map(originOf))]
+    .map((origin) => {
+      const values = entries['site:' + origin] || {};
+      const places = Object.keys(entries['resume:' + origin] || {}).length;
       const parts = [Number.isFinite(values.rate) ? values.rate.toFixed(2) + '×' : 'default speed'];
       if (places) parts.push(places + (places === 1 ? ' saved place' : ' saved places'));
-      const row = make('li');
-      const forgetButton = make('button', null, 'Forget');
-      forgetButton.type = 'button';
-      forgetButton.setAttribute('aria-label', 'Forget ' + name);
-      forgetButton.addEventListener('click', () => forgetSite(origin));
-      row.append(make('span', 'site', name), make('span', 'detail', parts.join(' · ')), forgetButton);
-      row.title = name;
-      return row;
+      return { origin, name: siteName(origin), detail: parts.join(' · ') };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function showSites() {
+  const rows = siteRows();
+  const signature = JSON.stringify(rows);
+  if (signature === drawn) return;
+  drawn = signature;
+  const list = field('sites');
+  // Keyboard focus stays on the same site's Forget button, or moves to the next one when that site is gone.
+  const focused = list.contains(document.activeElement) ? document.activeElement.dataset.origin : null;
+  const oldOrder = [...list.querySelectorAll('button')].map((button) => button.dataset.origin);
+  const buttons = new Map();
+  const items = rows.map(({ origin, name, detail }) => {
+    const row = make('li');
+    const forgetButton = make('button', null, 'Forget');
+    forgetButton.type = 'button';
+    forgetButton.dataset.origin = origin;
+    forgetButton.setAttribute('aria-label', 'Forget ' + name);
+    forgetButton.addEventListener('click', () => forgetSite(origin));
+    buttons.set(origin, forgetButton);
+    row.append(make('span', 'site', name), make('span', 'detail', detail), forgetButton);
+    row.title = name;
+    return row;
+  });
+  list.replaceChildren(...(items.length ? items : [make('li', 'empty', 'No saved sites yet.')]));
+  if (focused == null) return;
+  const next = buttons.get(focused) || oldOrder.slice(oldOrder.indexOf(focused) + 1).map((o) => buttons.get(o)).find(Boolean);
+  (next || [...buttons.values()].pop() || field('forget')).focus();
+}
+
+async function loadSites() {
+  const everything = await browser.storage.local.get(null);
+  Object.keys(everything)
+    .filter(isSiteKey)
+    .forEach((key) => {
+      entries[key] = everything[key];
     });
-  list.replaceChildren(...(rows.length ? rows : [make('li', 'empty', 'No saved sites yet.')]));
+  showSites();
 }
 
 field('options').addEventListener('change', save);
 field('options').addEventListener('submit', (event) => event.preventDefault());
 field('forget').addEventListener('click', forget);
-// Kept up to date while this page is open, as PSA saves speeds and places in other tabs.
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && Object.keys(changes).some(isSiteKey)) showSites();
+  if (area !== 'local') return;
+  const keys = Object.keys(changes).filter(isSiteKey);
+  keys.forEach((key) => {
+    if (changes[key].newValue === undefined) delete entries[key];
+    else entries[key] = changes[key].newValue;
+  });
+  if (keys.length) showSites();
 });
 load();
-showSites();
+loadSites();
