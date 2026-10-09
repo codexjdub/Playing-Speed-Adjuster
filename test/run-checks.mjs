@@ -3,7 +3,8 @@
 //   node test/run-checks.mjs [--browser chromium|firefox|webkit] [--channel chrome]
 //
 // Starts test/serve.mjs and checks what it serves, loads PSA on the test page at 1.8×, runs the page's own
-// checks (they stay defined in test-page.html), then clicks the real javascript: link on the install page.
+// checks (they stay defined in test-page.html), checks that the mouse reaches PSA in real fullscreen, then
+// clicks the real javascript: link on the install page.
 // Exits with 1 on any failure.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -110,6 +111,36 @@ try {
     });
   results.lines.forEach((text) => lines.push({ ok: !text.startsWith('FAIL'), text }));
   diagnostics = await diagnose(page);
+
+  // 1b. Real fullscreen, which the test page can only pretend: the mouse must still reach PSA. (Chrome lets
+  // it reach only what is inside the fullscreen element.)
+  const reachName = 'the mouse reaches PSA over a real fullscreen element';
+  await page.evaluate(() => {
+    if (!window.__speedCtl) document.getElementById('load').click();
+  });
+  await page.waitForFunction(() => window.__speedCtl, null, { timeout: 10000 });
+  await page.click('#fs');
+  const wentFullscreen = await page
+    .waitForFunction(() => !!document.fullscreenElement, null, { timeout: 3000 })
+    .then(() => true, () => false);
+  if (!wentFullscreen) {
+    lines.push({ ok: true, text: 'SKIP ' + reachName + ' — this browser did not go fullscreen here' });
+  } else {
+    await page.waitForTimeout(500);
+    const spot = await page.evaluate(() => {
+      const r = document.querySelector('speed-ctl').getBoundingClientRect();
+      return { x: r.left + Math.min(20, r.width / 2), y: r.top + Math.min(10, r.height / 2) };
+    });
+    await page.mouse.move(spot.x, spot.y, { steps: 3 });
+    const reached = await page.evaluate(({ x, y }) => {
+      const top = document.elementsFromPoint(x, y)[0];
+      return { top: top ? top.localName : null, hover: document.querySelector('speed-ctl').matches(':hover') };
+    }, spot);
+    if (reached.top === 'speed-ctl' && reached.hover) pass(reachName);
+    else fail(reachName + ' — ' + JSON.stringify(reached));
+    await page.evaluate(() => document.exitFullscreen()).catch(() => {});
+    await page.mouse.move(5, 715);
+  }
 
   // 2. The real bookmarklet link: the encoded javascript: URL must run and report this version.
   await page.goto(base + '/');

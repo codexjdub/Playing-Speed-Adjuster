@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.7.6';
+  const VERSION = '1.7.7';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1719,7 +1719,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // ---- Mounting ---------------------------------------------------------------------------------
 
   function fullscreenElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement || null;
+    let fs = document.fullscreenElement || document.webkitFullscreenElement || null;
+    // Inside an open shadow root the document reports only its host; the element itself is further in.
+    while (fs && fs.shadowRoot && fs.shadowRoot.fullscreenElement) fs = fs.shadowRoot.fullscreenElement;
+    return fs;
   }
 
   function isPopoverOpen() {
@@ -1747,14 +1750,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   let covers = []; // the page's top-layer elements, in the order they opened
+  const noRoom = new WeakSet(); // fullscreen elements that don't show what is put in them
 
   function mount(deep) {
     if (!shown) return;
     let parent = document.documentElement;
     const fs = fullscreenElement();
-    // Without popover support, a fullscreen container can only show the panel from inside it.
-    // A bare <video> can't hold children, so there the panel stays hidden until fullscreen ends.
-    if (!canPopover && fs && !isMedia(fs) && fs.localName !== 'iframe') parent = fs;
+    // While something is fullscreen, Chrome lets the mouse reach only what is inside it, and without popover
+    // support only what is inside it shows, so the panel moves inside it. A bare <video> or an iframe can't
+    // hold children: there the panel stays outside, out of the mouse's reach (and hidden without popovers).
+    if (fs && !isMedia(fs) && fs.localName !== 'iframe' && !noRoom.has(fs)) parent = fs;
     let raise = false;
     if (canPopover) {
       const open = pageTopLayer(deep);
@@ -1773,6 +1778,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!canPopover) return;
     if (raise && isPopoverOpen()) safely(() => host.hidePopover());
     if (!isPopoverOpen()) safely(() => host.showPopover());
+    // A shadow host whose shadow tree is closed shows only what that tree places, so there the panel would
+    // vanish: it goes back outside.
+    if (parent === fs && !host.getClientRects().length) {
+      noRoom.add(fs);
+      mount(deep);
+    }
   }
 
   function onTopLayerChange() {
