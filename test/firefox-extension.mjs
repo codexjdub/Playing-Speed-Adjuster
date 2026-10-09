@@ -52,7 +52,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let driver = null;
 try {
   const options = new firefox.Options()
-    .addArguments('-headless')
+    // System access lets the test open the extension's settings page in a tab of its own (see below).
+    .addArguments('-headless', '-remote-allow-system-access')
     .setPreference('media.autoplay.default', 0)
     .setPreference('extensions.webextensions.uuids', JSON.stringify({ 'psa@codexjdub.github.io': extensionUuid }));
   driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).build();
@@ -178,8 +179,17 @@ try {
   const embedOnlyRate = await inFrame('const r = document.getElementById("embedded").playbackRate; return Math.abs(r - 1.8) < 0.005 && r');
   check(!!embedOnlyRate, '] on that page speeds up the embedded player to 1.8×');
 
-  // The settings page lists this site with its speed, and forgets just it.
-  await driver.get(`moz-extension://${extensionUuid}/options.html`);
+  // The settings page lists this site with its speed, and forgets just it. A web page can't navigate to the
+  // extension's pages, so it opens in a new tab from Firefox's own side, as the toolbar menu would.
+  const pageTab = await driver.getWindowHandle();
+  await driver.setContext(firefox.Context.CHROME);
+  try {
+    await driver.executeScript('gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);', `moz-extension://${extensionUuid}/options.html`);
+  } finally {
+    await driver.setContext(firefox.Context.CONTENT);
+  }
+  const settingsTab = (await driver.getAllWindowHandles()).find((handle) => handle !== pageTab);
+  await driver.switchTo().window(settingsTab);
   const site = '127.0.0.1:8767';
   const findRow = `return [...document.querySelectorAll("#sites li")].find((li) => li.textContent.includes("http://${site}"))`;
   const listed = await until(findRow + '?.textContent || null');
@@ -187,6 +197,8 @@ try {
   await run(findRow + '?.querySelector("button").click()');
   const gone = await until(findRow + ' ? null : true');
   check(!!gone, 'Forget on the settings page removes just that site');
+  await driver.close();
+  await driver.switchTo().window(pageTab);
   await driver.get(pageUrl);
   const reset = await until('return !!window.__speedCtl && window.__speedCtl.inspect().rate === 1');
   check(!!reset, 'a forgotten site is back to the default speed', await run('return window.__speedCtl && window.__speedCtl.inspect().rate'));
