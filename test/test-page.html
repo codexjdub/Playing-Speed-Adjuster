@@ -524,6 +524,27 @@
       check(onTop(), 'the panel stays on top of a popover the page opens');
       pagePopover.hidePopover();
 
+      progress('background tab');
+      // A tab in the background (simulated) with nothing playing rests until it is shown again. Taken off the
+      // page meanwhile, the panel is put back only then: that happens on a tick, and no tick runs while resting.
+      // (Player events still bring the panel up to date; they are rare there.)
+      const wasPlaying = ctl.inspect().media.map(({ el }) => el).filter((el) => !el.paused);
+      wasPlaying.forEach((el) => el.pause());
+      await wait(200);
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      const restingHost = document.querySelector('speed-ctl');
+      restingHost.remove();
+      await wait(1500);
+      const backWhileHidden = restingHost.isConnected;
+      const stillPlaying = ctl.inspect().media.filter(({ el }) => !el.paused).map(({ title }) => title);
+      delete document.hidden;
+      await wait(1000);
+      const backWhenShown = restingHost.isConnected;
+      check(!backWhileHidden && backWhenShown, 'a background tab with nothing playing rests until it is shown again',
+        'back while hidden ' + backWhileHidden + ', when shown ' + backWhenShown +
+          (stillPlaying.length ? '; playing: ' + stillPlaying.join(', ') : ''));
+      wasPlaying.forEach((el) => el.play().catch(() => {}));
+
       progress('minimize');
       // Minimize to the pill and back; the state is remembered. Another tab on this site has meanwhile
       // saved a different speed, which saving the minimized state here must not overwrite.

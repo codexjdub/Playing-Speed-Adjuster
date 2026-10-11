@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.8.2';
+  const VERSION = '1.8.3';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -44,8 +44,11 @@
   const SKIP_BACK = 10;
   const SKIP_AHEAD = 20;
   const TICK_MS = 500;
-  // Shadow roots and same-origin iframes are rediscovered every Nth tick, because that walk visits every element.
+  // Every Nth tick: a full look at the page's dialogs and popovers (they mostly report opening as they do, see
+  // TOP_LAYER_EVENTS), and, while the full panel is open, the walk that rediscovers shadow roots and same-origin
+  // iframes, which visits every element. While it is minimized or hidden, the walk comes every WALK_EVERY ticks.
   const DEEP_SCAN_EVERY = 4;
+  const WALK_EVERY = 12;
   // A site that resets the speed more often than this gets playbackRate locked on that element.
   const FIGHT_LIMIT = 8;
   const FIGHT_WINDOW_MS = 2000;
@@ -1761,12 +1764,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   const TOP_LAYER = 'dialog:modal, :popover-open';
 
-  // What the page shows in the top layer of this document (iframes have their own). Shadow roots are
-  // only searched when `deep`; ones already found are checked directly in between.
-  function pageTopLayer(deep) {
+  // What the page shows in the top layer of this document (iframes have their own), in it and its shadow roots.
+  function pageTopLayer() {
     const found = [];
     roots.forEach((undo, root) => {
-      if (root.nodeType === 9 ? root !== document : !deep || root.host.ownerDocument !== document) return;
+      if (root.nodeType === 9 ? root !== document : root.host.ownerDocument !== document) return;
       safely(() => root.querySelectorAll(TOP_LAYER).forEach((el) => el !== host && found.push(el)));
     });
     covers.forEach((el) => {
@@ -1788,11 +1790,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (fs && !isMedia(fs) && fs.localName !== 'iframe' && !noRoom.has(fs)) parent = fs;
     let raise = false;
     if (canPopover) {
-      const open = pageTopLayer(deep);
-      const opened = open.filter((el) => covers.indexOf(el) === -1);
-      covers = covers.filter((el) => open.indexOf(el) !== -1).concat(opened);
-      // A dialog or popover the page opens later sits above the panel; re-showing puts the panel back on top.
-      raise = opened.length > 0;
+      if (deep) {
+        const open = pageTopLayer();
+        const opened = open.filter((el) => covers.indexOf(el) === -1);
+        covers = covers.filter((el) => open.indexOf(el) !== -1).concat(opened);
+        // A dialog or popover the page opens later sits above the panel; re-showing puts the panel back on top.
+        raise = opened.length > 0;
+      } else {
+        // In between full looks only the known ones are checked, which is cheap: one that closed drops out.
+        covers = covers.filter((el) => el.isConnected && el.matches(TOP_LAYER));
+      }
       // A modal dialog makes everything outside it unclickable, so while one is open the panel moves inside
       // the one opened last, which is on top. As a popover it still shows above the dialog, at the same place.
       const modal = covers.filter((el) => el.localName === 'dialog' && el.matches(':modal')).pop();
@@ -1978,15 +1985,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!alive) return;
     const count = tickCount;
     tickCount += 1;
-    let deep = count % DEEP_SCAN_EVERY === 0;
-    // The extension with nothing to play and no panel showing (after the first look, which starts listening
-    // for media): no looking while the tab is in the background, and otherwise less often.
+    // After the first look, which starts listening for media: a tab in the background with nothing playing
+    // rests until it is shown again or something plays.
+    if (count > 0 && document.hidden && !mediaList.some((el) => !el.paused)) return;
+    const topLayer = count % DEEP_SCAN_EVERY === 0;
+    let walk = count % (shown && !minimized ? DEEP_SCAN_EVERY : WALK_EVERY) === 0;
+    // The extension with nothing to play and no panel showing looks less often.
     if (ext && !shown && !mediaList.length && count > 0) {
-      if (document.hidden || count % IDLE_EVERY !== 0) return;
-      deep = count % IDLE_DEEP_EVERY === 0;
+      if (count % IDLE_EVERY !== 0) return;
+      walk = count % IDLE_DEEP_EVERY === 0;
     }
-    if (deep) discoverRoots();
-    mount(deep);
+    if (walk) discoverRoots();
+    mount(topLayer);
     refresh();
   }
 
