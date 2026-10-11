@@ -47,7 +47,7 @@
   .firefox { margin: 20px 0 0; font-size: 15px; color: var(--muted); max-width: 32em; }
   .firefox a { font-weight: 600; }
 
-  .mocks { position: relative; width: 272px; max-width: 100%; justify-self: center; }
+  .mocks { width: 272px; max-width: 100%; justify-self: center; }
   .mock {
     padding: 4px 10px 10px; border-radius: 12px;
     background: rgba(28, 28, 30, 0.97); color: #f5f5f7; font-size: 13px; line-height: 1.35;
@@ -72,9 +72,9 @@
   .mock-presets { display: flex; gap: 4px; }
   .mock-presets span { flex: 1; height: 26px; border-radius: 7px; background: rgba(255, 255, 255, 0.09); display: grid; place-items: center; font-size: 12px; }
   .mock-presets .on { background: #5ea8ff; color: #0b1b2e; font-weight: 600; }
-  /* The panel shrunk to its pill, over the panel's lower corner. */
+  /* The panel shrunk to its pill, below it. */
   .mock-pill {
-    position: absolute; left: -32px; bottom: -30px; display: flex; align-items: center; gap: 2px;
+    width: max-content; margin: 22px 0 0 -24px; display: flex; align-items: center; gap: 2px;
     padding: 4px 5px 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.2;
     color: #f5f5f7; background: rgba(28, 28, 30, 0.97); border: 1px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); white-space: nowrap; transform: rotate(2deg);
@@ -133,7 +133,7 @@
     h1 { font-size: 34px; }
     .lede { font-size: 17px; }
     .tracks, .grid { grid-template-columns: 1fr; }
-    .mock-pill { position: static; width: max-content; margin: 18px auto 0; }
+    .mock-pill { margin: 18px auto 0; }
     .top nav { gap: 14px; }
   }
 </style>
