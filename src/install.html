@@ -48,8 +48,9 @@
   .firefox { margin: 20px 0 0; font-size: 15px; color: var(--muted); max-width: 32em; }
   .firefox a { font-weight: 600; }
 
+  .mocks { position: relative; width: 272px; max-width: 100%; justify-self: center; }
   .mock {
-    width: 272px; max-width: 100%; justify-self: center; padding: 4px 10px 10px; border-radius: 12px;
+    padding: 4px 10px 10px; border-radius: 12px;
     background: rgba(28, 28, 30, 0.97); color: #f5f5f7; font-size: 13px; line-height: 1.35;
     border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
     transform: rotate(-1.5deg);
@@ -72,6 +73,18 @@
   .mock-presets { display: flex; gap: 4px; }
   .mock-presets span { flex: 1; height: 26px; border-radius: 7px; background: rgba(255, 255, 255, 0.09); display: grid; place-items: center; font-size: 12px; }
   .mock-presets .on { background: #5ea8ff; color: #0b1b2e; font-weight: 600; }
+  /* The panel shrunk to its pill, over the panel's lower corner. */
+  .mock-pill {
+    position: absolute; left: -32px; bottom: -30px; display: flex; align-items: center; gap: 2px;
+    padding: 4px 5px 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.2;
+    color: #f5f5f7; background: rgba(28, 28, 30, 0.97); border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); white-space: nowrap; transform: rotate(2deg);
+  }
+  .mock-pill b { display: flex; align-items: center; gap: 6px; margin-right: 4px; font-size: 12px; color: rgba(245, 245, 247, 0.75); }
+  .mock-pill b i { width: 8px; height: 8px; border-radius: 50%; background: #5ea8ff; }
+  .mock-pill span { height: 26px; min-width: 26px; padding: 0 6px; display: flex; align-items: center; justify-content: center; gap: 3px; }
+  .mock-pill .mock-step { font-size: 16px; }
+  .mock-pill svg { width: 10px; height: 10px; fill: currentColor; opacity: 0.7; }
 
   section { padding: 48px 0; border-top: 1px solid var(--line); }
   h2 { font-size: 28px; letter-spacing: -0.01em; margin: 0 0 12px; }
@@ -121,6 +134,7 @@
     h1 { font-size: 34px; }
     .lede { font-size: 17px; }
     .tracks, .grid { grid-template-columns: 1fr; }
+    .mock-pill { position: static; width: max-content; margin: 18px auto 0; }
     .top nav { gap: 14px; }
   }
 </style>
@@ -148,7 +162,8 @@
         <p class="firefox">Using Firefox? <a href="https://addons.mozilla.org/firefox/addon/playing-speed-adjuster-psa/">Add PSA to Firefox</a> as an extension that runs on its own, updates itself, and also reaches players embedded from other sites.</p>
         <p class="version-note">Version %VERSION%. Your panel shows its version next to “PSA”. If yours is older, drag the button to your bookmarks bar again and delete the old bookmark.</p>
       </div>
-      <div class="mock" aria-hidden="true">
+      <div class="mocks" aria-hidden="true">
+      <div class="mock">
         <div class="mock-bar"><b>PSA<i></i><small>%VERSION%</small></b><span>‹ 1/2 ›</span><span>–</span><span>×</span></div>
         <div class="mock-meta"><strong>Morning news, part 1</strong><small>Playing · 3:12 / 24:40 · 14:18 left</small></div>
         <div class="mock-transport">
@@ -158,6 +173,8 @@
         </div>
         <div class="mock-speed"><span>−</span><span class="mock-readout">1.50×</span><span>+</span></div>
         <div class="mock-presets"><span>1</span><span>1.25</span><span class="on">1.5</span><span>1.75</span><span>2</span><span>2.5</span><span>3</span></div>
+      </div>
+      <div class="mock-pill"><b>PSA<i></i></b><span class="mock-step">−</span><span>1.50×<svg viewBox="0 0 16 16"><path d="M3.5 6h9L8 11z"/></svg></span><span class="mock-step">+</span></div>
       </div>
     </div>
 
