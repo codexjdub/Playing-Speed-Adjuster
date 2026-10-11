@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.8.1';
+  const VERSION = '1.8.2';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -985,7 +985,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .pill-menu.up { top: auto; bottom: calc(100% + 6px); }
 .pill .pill-menu button { width: 100%; height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; font-variant-numeric: tabular-nums; }
 .pill .pill-menu button[aria-checked="true"] { background: #5ea8ff; color: #0b1b2e; }
-.pill.pulse .pill-dot { animation: dot-pulse 0.9s ease-out 2; }
+.pill.pulse .pill-dot { animation: dot-pulse 0.9s ease-out; }
 @keyframes dot-pulse {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(94, 168, 255, 0.8); }
   40% { transform: scale(1.5); }
@@ -1510,7 +1510,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     else render();
   }
 
-  // The pill's blue dot swells and glows twice when the pill appears and when the speed changes.
+  // The pill's blue dot swells and glows once when the pill appears and when the speed changes.
   function pulsePill() {
     if (!minimized || ui.pill.hidden || !shown) return;
     ui.pill.classList.remove('pulse');

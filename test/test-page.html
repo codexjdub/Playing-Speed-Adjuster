@@ -540,8 +540,9 @@
       check(!!panel.querySelector('.bar .brand-dot'), "the full panel's top bar has the blue dot");
       const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const dotAnimation = getComputedStyle(pill.querySelector('.pill-dot')).animationName;
-      check(reducedMotion || (pill.classList.contains('pulse') && dotAnimation === 'dot-pulse' && getComputedStyle(pill).animationName === 'none'),
-        "the pill's dot glows when the pill appears", 'dot ' + dotAnimation + ', pill ' + getComputedStyle(pill).animationName);
+      const dotPulses = getComputedStyle(pill.querySelector('.pill-dot')).animationIterationCount;
+      check(reducedMotion || (pill.classList.contains('pulse') && dotAnimation === 'dot-pulse' && dotPulses === '1' && getComputedStyle(pill).animationName === 'none'),
+        "the pill's dot glows once when the pill appears", 'dot ' + dotAnimation + ' × ' + dotPulses + ', pill ' + getComputedStyle(pill).animationName);
 
       // The pill's − and + step by 0.1, and its speed opens a menu of common speeds.
       const beforeStep = ctl.inspect().rate;
