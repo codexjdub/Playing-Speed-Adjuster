@@ -720,6 +720,10 @@
       check(Math.abs(ctl.inspect().rate - start) < 0.005, '[ slows down by 0.1', '→ ' + ctl.inspect().rate);
       press('\\');
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, '\\ sets 1.5×', '→ ' + ctl.inspect().rate);
+      press('\\');
+      check(Math.abs(ctl.inspect().rate - 1) < 0.005, '\\ again goes back to 1×', '→ ' + ctl.inspect().rate);
+      press('\\');
+      check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, '\\ a third time sets 1.5× again', '→ ' + ctl.inspect().rate);
       check(pageSawKey === 0, 'the page does not also receive handled keys', pageSawKey + ' seen');
       const typing = document.getElementById('typing');
       typing.focus();

@@ -38,13 +38,13 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.8.3';
+  const VERSION = '1.8.4';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
   const KEY_STEP = 0.1;
-  // Keyboard shortcuts while the panel is open: a speed change, or a fixed speed.
-  const KEYS = { '[': { by: -KEY_STEP }, ']': { by: KEY_STEP }, '\\': { to: 1.5 } };
+  // Keyboard shortcuts while the panel is open: a speed change, or a fixed speed and, pressed again, back to normal.
+  const KEYS = { '[': { by: -KEY_STEP }, ']': { by: KEY_STEP }, '\\': { to: 1.5, back: 1 } };
   const PRESETS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const SKIP_BACK = 10;
   const SKIP_AHEAD = 20;
@@ -574,7 +574,8 @@
     if (isTyping(event)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    setRate(key.to !== undefined ? key.to : rate + key.by);
+    if (key.to === undefined) setRate(rate + key.by);
+    else setRate(Math.abs(rate - key.to) < 0.005 ? key.back : key.to);
   }
 
   function discoverRoots() {
@@ -1138,7 +1139,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.resume = button('resume', '', null, () => resume());
   ui.resume.hidden = true;
 
-  ui.readout = button('readout', '', 'Click to type a speed. Keys: [ slower, ] faster, \\ 1.5×', () => openEntry());
+  ui.readout = button('readout', '', 'Click to type a speed. Keys: [ slower, ] faster, \\ 1.5× or back to 1×', () => openEntry());
   ui.entry = make('input', 'entry');
   ui.entry.type = 'text';
   ui.entry.inputMode = 'decimal';

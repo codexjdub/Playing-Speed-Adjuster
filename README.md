@@ -36,7 +36,7 @@ While the panel is open, including minimized:
 | --- | --- |
 | `[` | Slow down by 0.1 |
 | `]` | Speed up by 0.1 |
-| `\` | Set 1.5× |
+| `\` | Set 1.5×, or back to 1× if already at 1.5× |
 
 They're ignored while you type in a text field, and ⌘ or Ctrl combinations are left to the browser (⌘[ is still Back). When PSA handles a key, the page doesn't also receive it.
 
