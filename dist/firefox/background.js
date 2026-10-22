@@ -4,7 +4,8 @@
 // Everything is kept per site, meaning the origin of the tab's page, so a player embedded from another
 // site follows the speed of the page it is on. Storage keys:
 //   options          { defaultRate, shortcuts, autoShow, excluded }   set on the options page
-//   site:<origin>    { rate, pos, fsPos }                               speed, panel position, and in fullscreen
+//   site:<origin>    { rate, pos, fsPos, channels }                     speed, panel position, and in fullscreen;
+//                    channels: { "<channel>": [speed, name, savedAt] }  YouTube channels with a speed of their own
 //   resume:<origin>  { "<page> <length>": [seconds, savedAt] }          where recordings were left
 // A page can only reach its own site's values, and frames embedded from other sites only the speed.
 // Private windows leave nothing behind: they read the saved values, but their changes aren't saved.
@@ -12,6 +13,7 @@
 // DEFAULT_OPTIONS comes from defaults.js, loaded first.
 const RESUME_KEEP = 100;
 const NAME_LIMIT = 2000; // characters in a saved place's name ("<page> <length>")
+const CHANNEL_KEEP = 200;
 
 // Storage writes are read-modify-write, so they run one at a time.
 let queue = Promise.resolve();
@@ -78,6 +80,7 @@ const handlers = {
         // Only the page itself gets its panel position and saved places, not frames embedded from elsewhere.
         pos: top && siteValues ? siteValues.pos : undefined,
         fsPos: top && siteValues ? siteValues.fsPos : undefined,
+        channels: top && siteValues ? siteValues.channels : undefined,
       },
       positions: top ? stored['resume:' + site] || {} : {},
     };
@@ -105,6 +108,28 @@ const handlers = {
       const from = typeof message.from === 'string' ? message.from.slice(0, 32) : '';
       browser.tabs.sendMessage(sender.tab.id, { type: 'rate', rate: value, from }).catch(() => {});
     }
+  },
+
+  // A channel's own speed (an entry), or none (null), from the page itself; the one changed longest ago goes
+  // once there are more than CHANNEL_KEEP.
+  async channel(message, sender) {
+    const site = siteOf(sender);
+    const id = typeof message.id === 'string' ? message.id.slice(0, 100) : '';
+    const entry = message.entry;
+    const valid =
+      entry === null ||
+      (Array.isArray(entry) && isRate(entry[0]) && typeof entry[1] === 'string' && Number.isFinite(entry[2]));
+    if (!site || !id || !valid || sender.frameId !== 0 || sender.tab.incognito) return;
+    await serially(async () => {
+      const key = 'site:' + site;
+      const { [key]: values = {} } = await browser.storage.local.get(key);
+      const channels = { ...values.channels };
+      if (entry) channels[id] = [entry[0], entry[1].slice(0, 100), entry[2]];
+      else delete channels[id];
+      const ids = Object.keys(channels).sort((a, b) => channels[a][2] - channels[b][2]);
+      ids.slice(0, Math.max(0, ids.length - CHANNEL_KEEP)).forEach((old) => delete channels[old]);
+      await browser.storage.local.set({ [key]: { ...values, channels } });
+    });
   },
 
   async positions(message, sender) {

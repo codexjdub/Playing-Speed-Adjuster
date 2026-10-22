@@ -211,9 +211,21 @@ try {
   );
   check(!!forgotten, 'after the page changes its address, the panel no longer names the embedded player');
 
+  // YouTube's "Just this channel", on a stand-in for a YouTube video page: the channel keeps 1× while the
+  // site keeps its speed, and the settings page lists the channel under the site.
+  await run(
+    'const u = new URL(location.href); u.searchParams.set("v", "vid1"); history.replaceState(null, "", u); const w = document.createElement("ytd-watch-flexy"); w.setAttribute("video-id", "vid1"); w.innerHTML = \'<div id="owner"><ytd-channel-name><a href="/@jazzcafe">Jazz Cafe</a></ytd-channel-name></div>\'; document.body.append(w);'
+  );
+  const switchShown = await until('const s = document.querySelector("speed-ctl").shadowRoot.querySelector(".channel"); return !s.hidden && s.getAttribute("aria-checked") === "false"');
+  check(!!switchShown, 'a YouTube video page shows "Just this channel"');
+  await run('const s = document.querySelector("speed-ctl").shadowRoot; s.querySelector(".channel").click(); s.querySelector(".presets button").click();');
+  const channelRate = await until('const i = window.__speedCtl.inspect(); return i.channel === "@jazzcafe" && Math.abs(i.rate - 1) < 0.005 && Math.abs(i.siteRate - 1) > 0.005');
+  check(!!channelRate, 'with it on, 1× is kept for the channel and not for the site',
+    await run('const i = window.__speedCtl.inspect(); return [i.channel, i.rate, i.siteRate].join(" ")'));
+
   // The settings page lists this site with its speed, and forgets just it. A web page can't navigate to the
   // extension's pages, so it opens in a new tab from Firefox's own side, as the toolbar menu would.
-  const savedRate = await run('return window.__speedCtl.inspect().rate');
+  const savedRate = await run('return window.__speedCtl.inspect().siteRate');
   const pageTab = await driver.getWindowHandle();
   await driver.setContext(firefox.Context.CHROME);
   try {
@@ -225,6 +237,12 @@ try {
   await driver.switchTo().window(settingsTab);
   const site = '127.0.0.1:8767';
   const findRow = `return [...document.querySelectorAll("#sites li")].find((li) => li.textContent.includes("http://${site}"))`;
+  const findChannel = 'return [...document.querySelectorAll("#sites li.channel")].find((li) => li.textContent.includes("Jazz Cafe"))';
+  const channelListed = await until(findChannel + '?.textContent || null');
+  check(!!channelListed && channelListed.includes('1.00×'), 'the settings page lists the channel with its speed', channelListed);
+  await run(findChannel + '?.querySelector("button").click()');
+  const channelGone = await until(findChannel + ' ? null : true');
+  check(!!channelGone && !!(await run(findRow)), 'Forget on a channel removes just the channel');
   const listed = await until(findRow + '?.textContent || null');
   check(!!listed && listed.includes(savedRate.toFixed(2) + '×'), 'the settings page lists this site with its speed', listed);
   await run(findRow + '?.querySelector("button").click()');

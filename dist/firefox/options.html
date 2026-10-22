@@ -26,6 +26,8 @@
   .sites .detail { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sites button { padding: 3px 10px; font-size: 13px; }
   .sites .empty { color: var(--muted); }
+  .sites li.channel { padding-left: 18px; }
+  .sites li.channel .site { font-weight: 400; }
 </style>
 </head>
 <body>
@@ -47,7 +49,7 @@
   </form>
   <section aria-labelledby="saved-title">
     <h2 id="saved-title" class="title">Saved sites</h2>
-    <p class="hint">Each site's speed and the places saved in its recordings. A tab that is already open keeps them until it is reloaded.</p>
+    <p class="hint">Each site's speed and the places saved in its recordings, with any YouTube channels that keep a speed of their own under the site. A tab that is already open keeps them until it is reloaded.</p>
     <ul id="sites" class="sites"></ul>
   </section>
   <p>

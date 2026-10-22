@@ -47,7 +47,8 @@ async function forget() {
   show('Forgot ' + sites + (sites === 1 ? ' site.' : ' sites.'));
 }
 
-// ---- Saved sites: each site's speed and saved places, with a Forget button for just that site ----------
+// ---- Saved sites: each site's speed and saved places, with a Forget button for just that site, and under it
+// the channels with a speed of their own (YouTube's "Just this channel"), each with its own Forget button ----
 // The list keeps its own copy of the site: and resume: entries, updated from each storage change, and is
 // drawn again only when what it shows changes: a playing tab saves its place every few seconds.
 
@@ -72,6 +73,23 @@ async function forgetSite(origin) {
   show('Forgot ' + siteName(origin) + '.');
 }
 
+async function forgetChannel(origin, id, name) {
+  const key = 'site:' + origin;
+  const { [key]: values } = await browser.storage.local.get(key);
+  if (!values || !values.channels) return;
+  const channels = { ...values.channels };
+  delete channels[id];
+  await browser.storage.local.set({ [key]: { ...values, channels } });
+  show('Forgot ' + name + '.');
+}
+
+const channelsOf = (values) =>
+  Object.entries(values.channels && typeof values.channels === 'object' ? values.channels : {})
+    .filter(([, entry]) => Array.isArray(entry) && Number.isFinite(entry[0]) && typeof entry[1] === 'string')
+    .map(([id, entry]) => ({ id, name: entry[1] || id, rate: entry[0] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+// One row for each site, followed by one for each of its channels. `key` names the row's Forget button.
 function siteRows() {
   return [...new Set(Object.keys(entries).map(originOf))]
     .map((origin) => {
@@ -79,29 +97,39 @@ function siteRows() {
       const places = Object.keys(entries['resume:' + origin] || {}).length;
       const parts = [Number.isFinite(values.rate) ? values.rate.toFixed(2) + '×' : 'default speed'];
       if (places) parts.push(places + (places === 1 ? ' saved place' : ' saved places'));
-      return { origin, name: siteName(origin), detail: parts.join(' · ') };
+      return { origin, name: siteName(origin), detail: parts.join(' · '), channels: channelsOf(values) };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap(({ origin, name, detail, channels }) => [
+      { key: origin, name, detail, forget: () => forgetSite(origin) },
+      ...channels.map((c) => ({
+        key: origin + ' ' + c.id,
+        name: c.name,
+        detail: c.rate.toFixed(2) + '×',
+        channel: true,
+        forget: () => forgetChannel(origin, c.id, c.name),
+      })),
+    ]);
 }
 
 function showSites() {
   const rows = siteRows();
-  const signature = JSON.stringify(rows);
+  const signature = JSON.stringify(rows.map(({ key, name, detail }) => [key, name, detail]));
   if (signature === drawn) return;
   drawn = signature;
   const list = field('sites');
   // Keyboard focus stays on the same site's Forget button, or moves to the next one when that site is gone.
-  const focused = list.contains(document.activeElement) ? document.activeElement.dataset.origin : null;
-  const oldOrder = [...list.querySelectorAll('button')].map((button) => button.dataset.origin);
+  const focused = list.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+  const oldOrder = [...list.querySelectorAll('button')].map((button) => button.dataset.key);
   const buttons = new Map();
-  const items = rows.map(({ origin, name, detail }) => {
-    const row = make('li');
+  const items = rows.map(({ key, name, detail, channel, forget }) => {
+    const row = make('li', channel ? 'channel' : null);
     const forgetButton = make('button', null, 'Forget');
     forgetButton.type = 'button';
-    forgetButton.dataset.origin = origin;
+    forgetButton.dataset.key = key;
     forgetButton.setAttribute('aria-label', 'Forget ' + name);
-    forgetButton.addEventListener('click', () => forgetSite(origin));
-    buttons.set(origin, forgetButton);
+    forgetButton.addEventListener('click', forget);
+    buttons.set(key, forgetButton);
     row.append(make('span', 'site', name), make('span', 'detail', detail), forgetButton);
     row.title = name;
     return row;

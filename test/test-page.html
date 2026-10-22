@@ -739,6 +739,60 @@
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys with ⌘ are left to the browser', 'rate ' + ctl.inspect().rate);
       document.removeEventListener('keydown', countKeys);
 
+      progress('channels');
+      // YouTube's "Just this channel": a stand-in for YouTube's page, as it looks while a video is on it.
+      const channelSwitch = panel.querySelector('.channel');
+      const pillChannel = panel.querySelector('.pill-channel');
+      check(channelSwitch.hidden && pillChannel.hidden, 'the channel switch is hidden where there is no channel');
+      const pageUrl = location.href;
+      const watch = document.createElement('ytd-watch-flexy');
+      watch.innerHTML = '<div id="owner"><ytd-channel-name><a href="/@jazzcafe">Jazz Cafe</a></ytd-channel-name></div>';
+      const ytPlayer = document.createElement('div');
+      ytPlayer.className = 'html5-video-player';
+      document.body.append(watch, ytPlayer);
+      const showVideo = async (id, href, name) => {
+        history.replaceState(null, '', '?v=' + id);
+        watch.setAttribute('video-id', id);
+        const link = watch.querySelector('a');
+        link.setAttribute('href', href);
+        link.textContent = name;
+        await wait(700);
+      };
+      const storedSite = () => JSON.parse(localStorage.getItem('speedCtl.v1'));
+      const siteBefore = ctl.inspect().rate;
+      await showVideo('vid1', '/@jazzcafe', 'Jazz Cafe');
+      check(!channelSwitch.hidden && !pillChannel.hidden && channelSwitch.getAttribute('aria-checked') === 'false' &&
+        channelSwitch.textContent.includes('Jazz Cafe'), 'a YouTube video shows the channel switch, off');
+      channelSwitch.click();
+      panel.querySelector('.presets button').click(); // 1×
+      check(Math.abs(ctl.inspect().rate - 1) < 0.005 && Math.abs(storedSite().rate - siteBefore) < 0.005 &&
+        (storedSite().channels || {})['@jazzcafe'][0] === 1,
+        'with the switch on, a speed change is saved for the channel only', JSON.stringify(storedSite()));
+      await showVideo('vid2', '/@other', 'Other');
+      check(Math.abs(ctl.inspect().rate - siteBefore) < 0.005 && channelSwitch.getAttribute('aria-checked') === 'false',
+        'another channel\'s video gets the site\'s speed', '→ ' + ctl.inspect().rate);
+      await showVideo('vid1', '/@jazzcafe', 'Jazz Cafe');
+      check(Math.abs(ctl.inspect().rate - 1) < 0.005 && pillChannel.getAttribute('aria-checked') === 'true',
+        'coming back to the channel brings back its speed', '→ ' + ctl.inspect().rate);
+      ytPlayer.classList.add('ad-showing');
+      await wait(700);
+      check(Math.abs(ctl.inspect().rate - siteBefore) < 0.005 && channelSwitch.hidden,
+        'during an ad the site\'s speed applies', '→ ' + ctl.inspect().rate);
+      ytPlayer.classList.remove('ad-showing');
+      history.replaceState(null, '', '?v=vid3'); // the address moved on, the page still shows vid1's channel
+      await wait(700);
+      check(ctl.inspect().channel === null, 'a page still showing the last video\'s channel doesn\'t count',
+        String(ctl.inspect().channel));
+      await showVideo('vid1', '/@jazzcafe', 'Jazz Cafe');
+      pillChannel.click();
+      check(Math.abs(ctl.inspect().rate - siteBefore) < 0.005 && !('@jazzcafe' in (storedSite().channels || {})),
+        'turning the switch off forgets the channel\'s speed', JSON.stringify(storedSite().channels));
+      watch.remove();
+      ytPlayer.remove();
+      history.replaceState(null, '', pageUrl);
+      await wait(700);
+      check(channelSwitch.hidden, 'the switch goes away with the channel');
+
       progress('resume');
       // Where a long recording was left is saved, and offered again when it plays from near the start.
       const long = document.getElementById('long');

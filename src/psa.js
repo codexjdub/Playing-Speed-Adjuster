@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.8.4';
+  const VERSION = '1.9.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -127,6 +127,84 @@
   const sameRate = (a, b) => Math.abs(a - b) < 0.005;
 
   let rate = clampRate(Number(saved.rate) || Number(saved.defaultRate) || 1);
+  let siteRate = rate; // the site's own speed; `rate` is a channel's while its video is on the page
+
+  // ---- Per-channel speeds -----------------------------------------------------------------------
+  // On YouTube, "Just this channel" keeps a speed for the channel of the video on the page. They are saved
+  // with the site's values as { "<channel>": [speed, name, savedAt] }, at most CHANNEL_KEEP of them; the
+  // one changed longest ago goes first.
+  const CHANNEL_KEEP = 200;
+  const isChannelEntry = (entry) =>
+    Array.isArray(entry) && Number(entry[0]) > 0 && typeof entry[1] === 'string' && Number.isFinite(entry[2]);
+  const channelSpeeds = {};
+  Object.entries(saved.channels && typeof saved.channels === 'object' ? saved.channels : {}).forEach(([id, entry]) => {
+    if (isChannelEntry(entry)) channelSpeeds[id] = entry;
+  });
+  let channel = null; // { id, name } of the video on the page, when known
+
+  function saveChannel(id, entry) {
+    if (entry) channelSpeeds[id] = entry;
+    else delete channelSpeeds[id];
+    if (ext) {
+      ext.send({ type: 'channel', id, entry });
+      return;
+    }
+    try {
+      // Merged into what is stored now, as save() does.
+      const latest = load(STORE_KEY);
+      const stored = {};
+      Object.entries(latest.channels && typeof latest.channels === 'object' ? latest.channels : {}).forEach(([key, value]) => {
+        if (isChannelEntry(value)) stored[key] = value;
+      });
+      if (entry) stored[id] = entry;
+      else delete stored[id];
+      const ids = Object.keys(stored).sort((a, b) => stored[a][2] - stored[b][2]);
+      ids.slice(0, Math.max(0, ids.length - CHANNEL_KEEP)).forEach((old) => delete stored[old]);
+      latest.channels = stored;
+      localStorage.setItem(STORE_KEY, JSON.stringify(latest));
+    } catch (err) {
+      // Storage is blocked or full: the channel's speed lasts for this visit only.
+    }
+  }
+
+  // YouTube: the channel of the video on the page. Moving to another video, the page shows the old one's
+  // channel until any ad before it ends, so the channel counts only once the page shows the video in the
+  // address and no ad is playing; until then the site's speed applies.
+  function channelNow() {
+    const flexy = document.querySelector('ytd-watch-flexy');
+    if (!flexy || flexy.hidden) return null;
+    const video = new URLSearchParams(location.search).get('v');
+    if (!video || flexy.getAttribute('video-id') !== video) return null;
+    if (document.querySelector('.html5-video-player.ad-showing')) return null;
+    const link = flexy.querySelector('#owner ytd-channel-name a');
+    const found = link && /^\/(@[^/?#]+|channel\/[^/?#]+)/.exec(link.getAttribute('href') || '');
+    if (!found) return null;
+    const id = found[1].slice(0, 100);
+    return { id, name: clean(link.textContent).slice(0, 100) || id };
+  }
+
+  // The speed for what is on the page: its channel's own, or the site's.
+  const channelEntry = () => (channel ? channelSpeeds[channel.id] : undefined);
+  const wantedRate = () => (channelEntry() ? clampRate(Number(channelEntry()[0])) : siteRate);
+
+  function noteChannel() {
+    const now = channelNow();
+    const changed = (now && now.id) !== (channel && channel.id);
+    channel = now;
+    if (changed) followRate(wantedRate());
+  }
+
+  function toggleChannel() {
+    if (!channel) return;
+    if (channelEntry()) {
+      saveChannel(channel.id, null);
+      followRate(siteRate);
+    } else {
+      saveChannel(channel.id, [rate, channel.name, Date.now()]);
+    }
+    render();
+  }
+
   // The extension first shows itself as the pill, when something starts playing.
   let minimized = ext ? true : saved.min === true;
 
@@ -287,7 +365,12 @@
   function setRate(value) {
     if (!isFinite(value)) return;
     rate = clampRate(value);
-    save('rate', rate);
+    if (channelEntry()) {
+      saveChannel(channel.id, [rate, channel.name, Date.now()]);
+    } else {
+      siteRate = rate;
+      save('rate', rate);
+    }
     mediaList.forEach(applyRate);
     render();
     pulsePill();
@@ -962,6 +1045,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .presets button { flex: 1; min-width: 0; height: 26px; padding: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
 .presets button[aria-pressed="true"] { background: #5ea8ff; color: #0b1b2e; font-weight: 600; }
 .note { margin-top: 8px; font-size: 11px; color: #ffd28a; }
+.channel {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; padding: 7px 2px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0; background: transparent; font-size: 12px; text-align: left;
+}
+.channel:hover, .channel:active { background: transparent; }
+.track { flex: none; position: relative; width: 28px; height: 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.22); }
+.track::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: #f5f5f7; transition: left 0.15s ease;
+}
+.channel:hover .track { background: rgba(255, 255, 255, 0.32); }
+.channel[aria-checked="true"] .track { background: #5ea8ff; }
+.channel[aria-checked="true"] .track::after { left: 14px; }
+.channel-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
 .pill {
   position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 4px 5px 4px 11px;
   border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.2;
@@ -989,6 +1086,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .pill-menu.up { top: auto; bottom: calc(100% + 6px); }
 .pill .pill-menu button { width: 100%; height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; font-variant-numeric: tabular-nums; }
 .pill .pill-menu button[aria-checked="true"] { background: #5ea8ff; color: #0b1b2e; }
+.pill-sep { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.12); }
+.pill .pill-menu .pill-channel { padding-left: 6px; font-weight: 400; }
+.pill .pill-menu .pill-channel[aria-checked="true"] { background: transparent; color: inherit; }
+.pill .pill-menu .pill-channel:hover { background: rgba(255, 255, 255, 0.14); }
+.pill-channel::before { content: ""; display: inline-block; width: 16px; }
+.pill-channel[aria-checked="true"]::before { content: "\\2713"; color: #5ea8ff; }
 .pill.pulse .pill-dot { animation: dot-pulse 0.9s ease-out; }
 @keyframes dot-pulse {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(94, 168, 255, 0.8); }
@@ -1170,7 +1273,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.note.hidden = true;
   ui.note.setAttribute('role', 'status');
 
-  ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.note);
+  // YouTube: keep the speed for the channel of the video on the page (see channelNow).
+  ui.channel = button('channel', null, null, () => toggleChannel());
+  ui.channel.setAttribute('role', 'switch');
+  ui.channel.title = 'Keep this speed for this channel only';
+  ui.channelName = make('span', 'channel-name');
+  ui.channel.append(make('span', 'track'), make('span', null, 'Just this channel'), ui.channelName);
+  ui.channel.hidden = true;
+
+  ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.channel, ui.note);
 
   // The minimized panel: − and + step the speed, the speed opens a menu of common speeds, and the rest of
   // the pill expands it when clicked and moves it when dragged. The blue dot after PSA (as on the icon), the
@@ -1206,6 +1317,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     },
     () => closePillMenu()
   );
+  ui.pillSep = make('div', 'pill-sep');
+  ui.pillChannel = button('pill-channel', 'Just this channel', null, () => {
+    toggleChannel();
+    closePillMenu();
+  });
+  ui.pillChannel.setAttribute('role', 'menuitemcheckbox');
+  ui.pillSep.hidden = true;
+  ui.pillChannel.hidden = true;
+  ui.pillMenu.append(ui.pillSep, ui.pillChannel);
   ui.pill.append(
     ui.pillName,
     button('pill-step', '−', 'Slower by ' + KEY_STEP, () => setRate(rate - KEY_STEP)),
@@ -1400,6 +1520,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
         if (node.getAttribute(state) !== current) node.setAttribute(state, current);
       })
     );
+    if (channel) {
+      const own = String(!!channelEntry());
+      setText(ui.channelName, '· ' + channel.name);
+      if (ui.channel.getAttribute('aria-checked') !== own) {
+        ui.channel.setAttribute('aria-checked', own);
+        ui.pillChannel.setAttribute('aria-checked', own);
+      }
+    }
+    if (ui.channel.hidden === !!channel) {
+      ui.channel.hidden = !channel;
+      ui.pillSep.hidden = !channel;
+      ui.pillChannel.hidden = !channel;
+      placeHost();
+    }
   }
 
   // ---- Actions ----------------------------------------------------------------------------------
@@ -1903,7 +2037,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     if (!alive || !message) return;
     if (message.type === 'rate') {
       if (message.from === copyId) return;
-      followRate(Number(message.rate));
+      const value = Number(message.rate);
+      if (!isFinite(value)) return;
+      // The site's speed changed elsewhere; a channel with a speed of its own keeps it.
+      siteRate = clampRate(value);
+      if (!channelEntry()) followRate(value);
       if (badged) updateBadge();
     } else if (message.type === 'toggle') {
       togglePanel();
@@ -1955,6 +2093,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // ---- Lifecycle --------------------------------------------------------------------------------
 
   function refresh() {
+    if (!ext || ext.top) noteChannel();
     mediaList = collectMedia();
     mediaList.forEach((el) => {
       noteDuration(el);
@@ -2036,6 +2175,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     inspect: () => ({
       version: VERSION,
       rate,
+      siteRate,
+      channel: channel && channel.id,
       minimized,
       shown,
       target,
@@ -2058,9 +2199,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       const old = load(STORE_KEY);
       const oldRate = Number(old.rate);
       if (oldRate > 0) {
-        rate = clampRate(oldRate);
+        rate = siteRate = clampRate(oldRate);
         save('rate', rate);
       }
+      Object.entries(old.channels && typeof old.channels === 'object' ? old.channels : {})
+        .filter(([, entry]) => isChannelEntry(entry))
+        .slice(-CHANNEL_KEEP)
+        .forEach(([id, entry]) => saveChannel(id, entry));
       ['pos', 'fsPos'].forEach((key) => {
         const spot = old[key];
         if (!spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.y)) return;
