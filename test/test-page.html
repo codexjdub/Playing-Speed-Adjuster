@@ -573,12 +573,36 @@
       pill.querySelector('[aria-label^="Slower"]').click();
       check(Math.abs(ctl.inspect().rate - beforeStep) < 0.005, "the pill's − slows down by 0.1", '→ ' + ctl.inspect().rate);
       const pillMenu = pill.querySelector('.pill-menu');
+      // Small (the dot and the speed) until the pointer, keyboard focus or its open menu makes it the full pill.
+      const pillMinus = pill.querySelector('[aria-label^="Slower"]');
+      const pillSmall = getComputedStyle(pillMinus).display === 'none' && getComputedStyle(pill.querySelector('.pill-label')).display === 'none';
       pill.querySelector('.pill-rate').click();
       const choice = [...pillMenu.querySelectorAll('button')].find((b) => b.textContent === '2.5×');
       check(!pillMenu.hidden && !!choice, "the pill's speed opens a menu of speeds");
+      check(pillSmall && getComputedStyle(pillMinus).display !== 'none',
+        'the pill is just the dot and the speed, and full while its menu is open', 'small before ' + pillSmall);
       if (choice) choice.click();
       check(Math.abs(ctl.inspect().rate - 2.5) < 0.005 && pillMenu.hidden, 'choosing from the menu sets the speed and closes it',
         'rate ' + ctl.inspect().rate);
+
+      // At the right edge, growing to the full pill moves it over to stay on screen, and back after.
+      const pillHost = document.querySelector('speed-ctl');
+      const pillBox0 = pill.getBoundingClientRect();
+      const toEdge = (type, x) => pill.dispatchEvent(new PointerEvent(type, {
+        pointerId: 12, button: 0, clientX: x, clientY: pillBox0.top + 4, bubbles: true, composed: true }));
+      toEdge('pointerdown', pillBox0.left + 4);
+      toEdge('pointermove', pillBox0.left + 4 + 5000);
+      toEdge('pointerup', pillBox0.left + 4 + 5000);
+      pillHost.blur && document.activeElement && document.activeElement.blur && document.activeElement.blur();
+      await wait(50);
+      const edgeLeft = Math.round(pillHost.getBoundingClientRect().left);
+      pill.querySelector('.pill-name').focus();
+      const grownRight = pill.getBoundingClientRect().right;
+      pill.querySelector('.pill-name').blur();
+      const backLeft = Math.round(pillHost.getBoundingClientRect().left);
+      check(grownRight <= document.documentElement.clientWidth + 0.5 && Math.abs(backLeft - edgeLeft) <= 1,
+        'at the right edge the full pill stays on screen, and the small one goes back',
+        'right ' + Math.round(grownRight) + ' of ' + document.documentElement.clientWidth + ', left ' + edgeLeft + ' → ' + backLeft);
 
       // Pressing the pill's buttons never drags it.
       const hostAt = () => {
@@ -618,7 +642,7 @@
       const dragged = hostAt();
       // It shrinks to the dot and the speed, and grows back with keyboard focus (or the pointer) on it.
       const minus = pill.querySelector('[aria-label^="Slower"]');
-      const compact = pill.classList.contains('compact') && getComputedStyle(minus).display === 'none' &&
+      const compact = getComputedStyle(minus).display === 'none' &&
         getComputedStyle(pill.querySelector('.pill-dot')).display !== 'none' && getComputedStyle(pill.querySelector('.pill-rate')).display !== 'none';
       pill.querySelector('.pill-name').focus();
       const grows = getComputedStyle(minus).display !== 'none';
@@ -630,7 +654,7 @@
       const woke = !pill.classList.contains('faded');
       await fullscreen(false);
       const afterExit = hostAt();
-      const fullAgain = !pill.classList.contains('compact') && getComputedStyle(minus).display !== 'none';
+      const smallAfter = getComputedStyle(minus).display === 'none';
       await fullscreen(true);
       const again = hostAt();
       await fullscreen(false);
@@ -677,8 +701,8 @@
         'where it is dragged in fullscreen is remembered for next time', dragged + ', next time ' + again);
       check(faded && woke, 'in fullscreen it fades away when the mouse is still (a hidden frame inside, as on YouTube, makes no difference), and comes back when it moves',
         'faded ' + faded + ', back ' + woke);
-      check(compact && grows && fullAgain, 'in fullscreen the pill shrinks to the dot and the speed, and grows back on focus',
-        'compact ' + compact + ', grows ' + grows + ', full after ' + fullAgain);
+      check(compact && grows && smallAfter, 'the pill is the dot and the speed, in fullscreen and out, and grows on focus',
+        'small ' + compact + ', grows ' + grows + ', small after ' + smallAfter);
       pill.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       pill.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 5, clientY: 5, bubbles: true }));
       await wait(100);

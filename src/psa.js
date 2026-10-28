@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.9.0';
+  const VERSION = '1.9.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1100,11 +1100,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 }
 @media (prefers-reduced-motion: reduce) { .pill.pulse .pill-dot { animation: none; } }
 .panel, .pill { transition: opacity 0.35s ease; }
-.pill.compact:not(:hover):not(:focus-within) .pill-label,
-.pill.compact:not(:hover):not(:focus-within) .pill-step,
-.pill.compact:not(:hover):not(:focus-within) .pill-rate svg { display: none; }
-.pill.compact:not(:hover):not(:focus-within) { padding-left: 9px; }
-.pill.compact:not(:hover):not(:focus-within) .pill-name { margin-right: 0; }
+.pill:not(:hover):not(:focus-within):not(.open) .pill-label,
+.pill:not(:hover):not(:focus-within):not(.open) .pill-step,
+.pill:not(:hover):not(:focus-within):not(.open) .pill-rate svg { display: none; }
+.pill:not(:hover):not(:focus-within):not(.open) { padding-left: 9px; }
+.pill:not(:hover):not(:focus-within):not(.open) .pill-name { margin-right: 0; }
 .panel.faded, .pill.faded { opacity: 0; pointer-events: none; }
 .glow {
   position: fixed; pointer-events: none; border: 3px solid #5ea8ff; border-radius: 8px;
@@ -1341,6 +1341,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     }
   });
   ui.pill.addEventListener('animationend', () => ui.pill.classList.remove('pulse'));
+  // The pill is just the blue dot and the speed, and grows to the full pill while the pointer is on it, it has
+  // keyboard focus or its menu is open (CSS above). Growing near the right edge, it moves over to stay on
+  // screen, and back after.
+  ['pointerenter', 'pointerleave', 'focusin', 'focusout'].forEach((type) => ui.pill.addEventListener(type, () => placeHost()));
 
   // Outline drawn over the page around the player chosen with ‹ ›.
   ui.glow = make('div', 'glow');
@@ -1659,6 +1663,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // The menu of common speeds under the pill's speed, or above it when there's no room below.
   function openPillMenu() {
     ui.pillMenu.hidden = false;
+    ui.pill.classList.add('open');
     ui.pillRate.setAttribute('aria-expanded', 'true');
     const box = ui.pill.getBoundingClientRect();
     ui.pillMenu.classList.toggle('up', box.bottom + ui.pillMenu.offsetHeight + 8 > viewport().height);
@@ -1667,6 +1672,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function closePillMenu() {
     if (ui.pillMenu.hidden) return;
     ui.pillMenu.hidden = true;
+    ui.pill.classList.remove('open');
     ui.pillRate.setAttribute('aria-expanded', 'false');
   }
 
@@ -1810,12 +1816,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function setFaded(value) {
     ui.panel.classList.toggle('faded', value);
     ui.pill.classList.toggle('faded', value);
-  }
-
-  // In fullscreen the pill shrinks to the blue dot and the speed, and grows back to the full pill while the
-  // pointer is on it or it has keyboard focus (CSS: .pill.compact).
-  function setCompact(value) {
-    ui.pill.classList.toggle('compact', value);
   }
 
   function onPointerMove() {
@@ -2084,7 +2084,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     // Re-showing moves the popover above the element that just entered the top layer.
     if (canPopover) safely(() => host.hidePopover());
     mount();
-    setCompact(!!fullscreenSpot);
     placeHost();
     // Starts the idle fade in fullscreen; after it, makes sure PSA is visible again.
     wake();
