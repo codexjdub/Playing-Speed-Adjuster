@@ -585,6 +585,18 @@
       check(Math.abs(ctl.inspect().rate - 2.5) < 0.005 && pillMenu.hidden, 'choosing from the menu sets the speed and closes it',
         'rate ' + ctl.inspect().rate);
 
+      // It grows around the speed, which stays where it was.
+      const rateBefore = pill.querySelector('.pill-rate').getBoundingClientRect().left;
+      pill.querySelector('.pill-name').focus();
+      const rateGrown = pill.querySelector('.pill-rate').getBoundingClientRect().left;
+      const grownFull = getComputedStyle(pillMinus).display !== 'none';
+      pill.querySelector('.pill-name').blur();
+      await wait(20);
+      const rateAfter = pill.querySelector('.pill-rate').getBoundingClientRect().left;
+      check(grownFull && Math.abs(rateGrown - rateBefore) <= 1 && Math.abs(rateAfter - rateBefore) <= 1,
+        'the pill grows around its speed, which stays in place',
+        Math.round(rateBefore) + ' → ' + Math.round(rateGrown) + ' → ' + Math.round(rateAfter) + ', full ' + grownFull);
+
       // At the right edge, growing to the full pill moves it over to stay on screen, and back after.
       const pillHost = document.querySelector('speed-ctl');
       const pillBox0 = pill.getBoundingClientRect();
@@ -599,6 +611,7 @@
       pill.querySelector('.pill-name').focus();
       const grownRight = pill.getBoundingClientRect().right;
       pill.querySelector('.pill-name').blur();
+      await wait(20);
       const backLeft = Math.round(pillHost.getBoundingClientRect().left);
       check(grownRight <= document.documentElement.clientWidth + 0.5 && Math.abs(backLeft - edgeLeft) <= 1,
         'at the right edge the full pill stays on screen, and the small one goes back',

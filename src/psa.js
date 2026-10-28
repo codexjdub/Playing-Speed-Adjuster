@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.9.1';
+  const VERSION = '1.9.2';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1100,11 +1100,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 }
 @media (prefers-reduced-motion: reduce) { .pill.pulse .pill-dot { animation: none; } }
 .panel, .pill { transition: opacity 0.35s ease; }
-.pill:not(:hover):not(:focus-within):not(.open) .pill-label,
-.pill:not(:hover):not(:focus-within):not(.open) .pill-step,
-.pill:not(:hover):not(:focus-within):not(.open) .pill-rate svg { display: none; }
-.pill:not(:hover):not(:focus-within):not(.open) { padding-left: 9px; }
-.pill:not(:hover):not(:focus-within):not(.open) .pill-name { margin-right: 0; }
+.pill:not(.grown) .pill-label,
+.pill:not(.grown) .pill-step,
+.pill:not(.grown) .pill-rate svg { display: none; }
+.pill:not(.grown) { padding-left: 9px; }
+.pill:not(.grown) .pill-name { margin-right: 0; }
 .panel.faded, .pill.faded { opacity: 0; pointer-events: none; }
 .glow {
   position: fixed; pointer-events: none; border: 3px solid #5ea8ff; border-radius: 8px;
@@ -1342,9 +1342,31 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   });
   ui.pill.addEventListener('animationend', () => ui.pill.classList.remove('pulse'));
   // The pill is just the blue dot and the speed, and grows to the full pill while the pointer is on it, it has
-  // keyboard focus or its menu is open (CSS above). Growing near the right edge, it moves over to stay on
-  // screen, and back after.
-  ['pointerenter', 'pointerleave', 'focusin', 'focusout'].forEach((type) => ui.pill.addEventListener(type, () => placeHost()));
+  // keyboard focus or its menu is open. It grows on both sides of the speed, which stays where it was, under
+  // the pointer: `grownBy` is how far its left edge then reaches past its spot. Near the window's edges it
+  // moves over to stay on screen, and back after.
+  let pointerOnPill = false;
+  let grownBy = 0;
+  const pillShift = () => (ui.pill.hidden ? 0 : grownBy);
+  function updateGrown() {
+    const grow = !ui.pill.hidden && (pointerOnPill || !ui.pillMenu.hidden || ui.pill.matches(':focus-within'));
+    if (ui.pill.classList.contains('grown') === grow) return;
+    const before = ui.pillRate.getBoundingClientRect().left;
+    ui.pill.classList.toggle('grown', grow);
+    grownBy = grow ? Math.max(0, Math.round(ui.pillRate.getBoundingClientRect().left - before)) : 0;
+    placeHost();
+  }
+  ui.pill.addEventListener('pointerenter', () => {
+    pointerOnPill = true;
+    updateGrown();
+  });
+  ui.pill.addEventListener('pointerleave', () => {
+    pointerOnPill = false;
+    updateGrown();
+  });
+  ui.pill.addEventListener('focusin', () => updateGrown());
+  // Focus has not moved yet while focusout runs.
+  ui.pill.addEventListener('focusout', () => setTimeout(updateGrown, 0));
 
   // Outline drawn over the page around the player chosen with ‹ ›.
   ui.glow = make('div', 'glow');
@@ -1645,6 +1667,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     ui.panel.hidden = value;
     ui.pill.hidden = !value;
     closePillMenu();
+    pointerOnPill = false;
+    updateGrown();
     if (value) ui.glow.hidden = true;
     // The same top-left corner is kept; clamping keeps the larger panel on screen when it expands.
     placeHost();
@@ -1663,7 +1687,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // The menu of common speeds under the pill's speed, or above it when there's no room below.
   function openPillMenu() {
     ui.pillMenu.hidden = false;
-    ui.pill.classList.add('open');
+    updateGrown();
     ui.pillRate.setAttribute('aria-expanded', 'true');
     const box = ui.pill.getBoundingClientRect();
     ui.pillMenu.classList.toggle('up', box.bottom + ui.pillMenu.offsetHeight + 8 > viewport().height);
@@ -1672,7 +1696,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function closePillMenu() {
     if (ui.pillMenu.hidden) return;
     ui.pillMenu.hidden = true;
-    ui.pill.classList.remove('open');
+    updateGrown();
     ui.pillRate.setAttribute('aria-expanded', 'false');
   }
 
@@ -1768,15 +1792,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     };
   }
 
+  // The spot is the panel's top-left corner, or the small pill's; the grown pill reaches left of it.
   function placeAt(x, y) {
     const view = viewport();
+    const shift = pillShift();
     const maxX = Math.max(0, view.width - (host.offsetWidth || 272));
     const maxY = Math.max(0, view.height - (host.offsetHeight || 215));
-    const left = Math.round(Math.min(Math.max(0, x), maxX));
+    const left = Math.round(Math.min(Math.max(0, x - shift), maxX));
     const top = Math.round(Math.min(Math.max(0, y), maxY));
     host.style.setProperty('left', left + 'px', 'important');
     host.style.setProperty('top', top + 'px', 'important');
-    return { x: left, y: top };
+    return { x: left + shift, y: top };
   }
 
   // Where the panel goes: the spot it was dragged to, or in fullscreen its fullscreen spot, which starts in the
@@ -1853,7 +1879,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       if (!drag || event.pointerId !== drag.id) return;
       if (!drag.moved && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) < 4) return;
       drag.moved = true;
-      const spot = placeAt(event.clientX - drag.dx, event.clientY - drag.dy);
+      const spot = placeAt(event.clientX - drag.dx + pillShift(), event.clientY - drag.dy);
       if (fullscreenSpot) fullscreenSpot = spot;
       else desired = spot;
     });
