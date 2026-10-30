@@ -38,7 +38,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.9.2';
+  const VERSION = '1.9.3';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1862,27 +1862,36 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   }
 
   // Both the panel's top bar and the minimized pill drag the panel. A press that doesn't move
-  // (less than 4px) is a click, which expands the pill. Its buttons and menu don't start a drag.
+  // (less than 4px) is a click, which expands the pill. Its buttons and menu don't start a drag, except
+  // its speed, the biggest part of the small pill: pressed and moved it drags, clicked it opens the menu.
   let drag = null;
+  let dragEnded = 0; // when a drag that started on the speed ended: the click that follows it is not one
   [ui.bar, ui.pill].forEach((handle) => {
     handle.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0 || event.target.closest('button, .pill-menu')) return;
+      const onRate = handle === ui.pill && !!event.target.closest('.pill-rate');
+      if (event.button !== 0 || (!onRate && event.target.closest('button, .pill-menu'))) return;
       const box = host.getBoundingClientRect();
       drag = {
         id: event.pointerId,
         handle,
+        onRate,
         x: event.clientX,
         y: event.clientY,
         dx: event.clientX - box.left,
         dy: event.clientY - box.top,
         moved: false,
       };
-      safely(() => handle.setPointerCapture(event.pointerId));
+      // On the speed, capturing the pointer at once would take its click; it is captured once it moves.
+      if (!onRate) safely(() => handle.setPointerCapture(event.pointerId));
       event.preventDefault();
     });
     handle.addEventListener('pointermove', (event) => {
       if (!drag || event.pointerId !== drag.id) return;
       if (!drag.moved && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) < 4) return;
+      if (!drag.moved && drag.onRate) {
+        closePillMenu();
+        safely(() => handle.setPointerCapture(event.pointerId));
+      }
       drag.moved = true;
       const spot = placeAt(event.clientX - drag.dx + pillShift(), event.clientY - drag.dy);
       if (fullscreenSpot) fullscreenSpot = spot;
@@ -1893,19 +1902,30 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       const ended = drag;
       drag = null;
       if (ended.moved) {
+        if (ended.onRate) dragEnded = Date.now();
         if (fullscreenSpot) {
           fullscreenHome = fullscreenSpot;
           save('fsPos', fullscreenHome);
         } else {
           save('pos', desired);
         }
-      } else if (ended.handle === ui.pill && event.type === 'pointerup') {
+      } else if (ended.handle === ui.pill && !ended.onRate && event.type === 'pointerup') {
         setMinimized(false);
       }
     };
     handle.addEventListener('pointerup', endDrag);
     handle.addEventListener('pointercancel', endDrag);
   });
+  ui.pill.addEventListener(
+    'click',
+    (event) => {
+      if (Date.now() - dragEnded > 300) return;
+      dragEnded = 0;
+      event.stopPropagation();
+      event.preventDefault();
+    },
+    true
+  );
 
   function onResize() {
     placeHost();

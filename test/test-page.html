@@ -628,7 +628,30 @@
       pointer('pointerdown', 100);
       pointer('pointermove', 160);
       pointer('pointerup', 160);
-      check(hostAt() === placeBefore && ctl.inspect().minimized, "dragging doesn't start on the pill's buttons", placeBefore + ' → ' + hostAt());
+      check(hostAt() === placeBefore && ctl.inspect().minimized, "dragging doesn't start on the pill's − and + buttons", placeBefore + ' → ' + hostAt());
+      // Its speed, the biggest part of the small pill, drags it when pressed and moved, and the click that
+      // follows doesn't open the menu; clicked without moving, it opens the menu.
+      const rateButton = pill.querySelector('.pill-rate');
+      const onRate = (type, x) => rateButton.dispatchEvent(new PointerEvent(type, { pointerId: 13, button: 0, clientX: x, clientY: 50, bubbles: true, composed: true }));
+      onRate('pointerdown', 160);
+      onRate('pointermove', 100);
+      onRate('pointerup', 100);
+      rateButton.click();
+      const movedBySpeed = hostAt();
+      const noMenuAfterDrag = pillMenu.hidden && ctl.inspect().minimized;
+      onRate('pointerdown', 100);
+      onRate('pointermove', 160);
+      onRate('pointerup', 160);
+      rateButton.click();
+      await wait(350);
+      onRate('pointerdown', 100);
+      onRate('pointerup', 100);
+      rateButton.click();
+      const menuOnClick = !pillMenu.hidden && ctl.inspect().minimized;
+      pill.querySelector('.pill-rate').click();
+      check(movedBySpeed !== placeBefore && noMenuAfterDrag && hostAt() === placeBefore && menuOnClick && pillMenu.hidden,
+        'the pill drags by its speed, and a click on the speed still opens the menu',
+        placeBefore + ' → ' + movedBySpeed + ' → ' + hostAt() + ', no menu after drag ' + noMenuAfterDrag + ', menu on click ' + menuOnClick);
 
       // Fullscreen (simulated: tests can't go fullscreen). PSA has a spot of its own there: the top-left corner
       // until it is dragged somewhere during fullscreen, which is then remembered.
