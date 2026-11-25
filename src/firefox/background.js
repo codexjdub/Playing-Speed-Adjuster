@@ -1,6 +1,11 @@
 // PSA for Firefox: keeps settings and positions in extension storage, and passes messages between the
 // frames of a tab and the toolbar button.
 //
+// The toolbar button shows the popup (popup.html) by default, which says why PSA isn't running in the tab: a
+// site in the list of sites to skip, or a page add-ons can't reach. A tab's page that starts PSA turns the popup
+// off for that tab, so the button shows and hides PSA's panel instead. Firefox puts the popup back when the
+// tab moves to another page.
+//
 // Everything is kept per site, meaning the origin of the tab's page, so a player embedded from another
 // site follows the speed of the page it is on. Storage keys:
 //   options          { defaultRate, shortcuts, autoShow, excluded }   set on the options page
@@ -57,6 +62,17 @@ function isExcluded(list, url) {
     .some((site) => host === site || host.endsWith('.' + site));
 }
 
+// The host name a page's site is skipped by: www.example.com and example.com are the same site.
+function siteHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch (err) {
+    return '';
+  }
+}
+
+const usePopup = (tabId, on) => browser.action.setPopup({ tabId, popup: on ? null : '' }).catch(() => {});
+
 const isRate = (value) => Number.isFinite(value) && value >= 0.25 && value <= 4;
 const isSpot = (value) => !!value && Number.isFinite(value.x) && Number.isFinite(value.y);
 
@@ -67,6 +83,7 @@ const handlers = {
     const options = await loadOptions();
     if (!site || isExcluded(options.excluded, sender.tab.url)) return { excluded: true };
     const top = sender.frameId === 0;
+    if (top) usePopup(sender.tab.id, false);
     const stored = await browser.storage.local.get(['site:' + site, 'resume:' + site]);
     const siteValues = stored['site:' + site];
     return {
@@ -166,19 +183,82 @@ const handlers = {
     browser.tabs.sendMessage(sender.tab.id, { type: 'started', site }, { frameId: 0 }).catch(() => {});
   },
 
+  // "Turn off PSA on this site" in the panel: the site joins the list of sites to skip, and PSA stops in every
+  // frame of the tab. The toolbar popup can turn it back on.
+  async exclude(message, sender) {
+    const host = siteHost(sender.tab.url);
+    if (sender.frameId !== 0 || !host) return;
+    await serially(async () => {
+      const options = await loadOptions();
+      if (isExcluded(options.excluded, sender.tab.url)) return;
+      const excluded = [String(options.excluded || '').trim(), host].filter(Boolean).join('\n');
+      await browser.storage.local.set({ options: { ...options, excluded } });
+    });
+    browser.tabs.sendMessage(sender.tab.id, { type: 'stop' }).catch(() => {});
+    usePopup(sender.tab.id, true);
+    await browser.action.setBadgeText({ tabId: sender.tab.id, text: '' });
+  },
+
   async badge(message, sender) {
     if (sender.frameId !== 0 || !isRate(message.rate)) return;
     await browser.action.setBadgeText({ tabId: sender.tab.id, text: String(message.rate) });
   },
 };
 
+// The toolbar popup asks about the tab it was opened for.
+const popupHandlers = {
+  // Why PSA isn't running in the tab, if it isn't: the site is one to skip, the page loaded while it was (or
+  // PSA was turned off there) so it needs a reload, or add-ons can't reach the page. Where it is running after
+  // all, the popup goes away again for the tab.
+  async status(message) {
+    const tab = await browser.tabs.get(message.tabId);
+    const options = await loadOptions();
+    const site = siteHost(tab.url);
+    if (site && isExcluded(options.excluded, tab.url)) return { state: 'excluded', site };
+    const reply = await browser.tabs.sendMessage(tab.id, { type: 'ping' }, { frameId: 0 }).then(
+      (running) => (running ? 'running' : 'reload'),
+      () => 'blocked'
+    );
+    if (reply === 'running') usePopup(tab.id, false);
+    return { state: reply, site };
+  },
+
+  // "Turn back on": every entry in the list of sites to skip that covers the tab's site comes out.
+  async include(message) {
+    const tab = await browser.tabs.get(message.tabId);
+    await serially(async () => {
+      const options = await loadOptions();
+      const host = (() => {
+        try {
+          return new URL(tab.url).hostname;
+        } catch (err) {
+          return '';
+        }
+      })();
+      const excluded = String(options.excluded || '')
+        .split(/[\s,]+/)
+        .filter((entry) => {
+          const site = hostOf(entry);
+          return site && !(host === site || host.endsWith('.' + site));
+        })
+        .join('\n');
+      await browser.storage.local.set({ options: { ...options, excluded } });
+    });
+  },
+};
+
 browser.runtime.onMessage.addListener((message, sender) => {
-  const handler = message && sender.tab && Object.hasOwn(handlers, message.type) ? handlers[message.type] : null;
+  if (!message) return undefined;
+  if (sender.url && sender.url.startsWith(browser.runtime.getURL('popup.html'))) {
+    return Object.hasOwn(popupHandlers, message.type) ? popupHandlers[message.type](message).catch(() => undefined) : undefined;
+  }
+  const handler = sender.tab && Object.hasOwn(handlers, message.type) ? handlers[message.type] : null;
   return handler ? handler(message, sender).catch(() => undefined) : undefined;
 });
 
+// Only where the popup is off for the tab, so PSA was running there.
 browser.action.onClicked.addListener((tab) => {
-  browser.tabs.sendMessage(tab.id, { type: 'toggle' }, { frameId: 0 }).catch(() => {});
+  browser.tabs.sendMessage(tab.id, { type: 'toggle' }, { frameId: 0 }).catch(() => usePopup(tab.id, true));
 });
 
 browser.action.setBadgeBackgroundColor({ color: '#5ea8ff' });

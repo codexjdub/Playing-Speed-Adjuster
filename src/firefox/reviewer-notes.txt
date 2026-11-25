@@ -17,4 +17,6 @@ The second content script (psa.js) runs in the page's MAIN world because PSA wra
 
 bridge.js, in the isolated world, relays JSON-string messages between psa.js and background.js through CustomEvents on the document. background.js keeps settings and positions in storage.local per site (the tab's page origin). A page can only reach its own site's values, and frames embedded from other sites only the speed.
 
+popup.html is the toolbar popup. background.js turns it off for each tab where PSA starts, so it shows only where PSA isn't running: on a site in the user's list of sites to skip (with a button to take it off the list) or on a page add-ons can't reach.
+
 The add-on makes no network requests and collects no data.

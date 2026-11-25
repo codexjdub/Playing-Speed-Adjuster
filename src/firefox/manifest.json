@@ -21,7 +21,12 @@
   "background": { "scripts": ["defaults.js", "background.js"] },
   "action": {
     "default_title": "Show or hide the PSA panel",
-    "default_icon": "icon.svg"
+    "default_icon": "icon.svg",
+    "default_popup": "popup.html",
+    "theme_icons": [
+      { "light": "icon-light.svg", "dark": "icon.svg", "size": 16 },
+      { "light": "icon-light.svg", "dark": "icon.svg", "size": 32 }
+    ]
   },
   "commands": {
     "_execute_action": {

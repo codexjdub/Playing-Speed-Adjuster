@@ -9,8 +9,9 @@
 // (without a second PSA there), that a late copy of its own speed change is ignored, that the speed is
 // remembered after a reload, how the toolbar's toggle (togglePanel) shows and hides PSA, that a same-site
 // player frame added later is looked after at once, that muted playing doesn't pop up the pill, that the panel
-// names a page's only player when it is embedded from another site (until the address changes), and that the
-// settings page lists this site with its speed and forgets just it.
+// names a page's only player when it is embedded from another site (until the address changes), that the
+// settings page lists this site with its speed and forgets just it, and that "Turn off PSA" stops it on the site
+// until the toolbar popup turns it back on.
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -69,6 +70,20 @@ try {
       if (value) break;
     }
     return value;
+  };
+  // A web page can't navigate to the extension's pages, so they open in a new tab from Firefox's own side, as
+  // the toolbar menu would. Returns the new tab's handle, switched to.
+  const openExtensionTab = async (path) => {
+    const before = await driver.getAllWindowHandles();
+    await driver.setContext(firefox.Context.CHROME);
+    try {
+      await driver.executeScript('gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);', `moz-extension://${extensionUuid}/${path}`);
+    } finally {
+      await driver.setContext(firefox.Context.CONTENT);
+    }
+    const handle = (await driver.getAllWindowHandles()).find((h) => !before.includes(h));
+    await driver.switchTo().window(handle);
+    return handle;
   };
   const inFrame = async (script) => {
     await driver.switchTo().frame(0);
@@ -223,18 +238,12 @@ try {
   check(!!channelRate, 'with it on, 1× is kept for the channel and not for the site',
     await run('const i = window.__speedCtl.inspect(); return [i.channel, i.rate, i.siteRate].join(" ")'));
 
-  // The settings page lists this site with its speed, and forgets just it. A web page can't navigate to the
-  // extension's pages, so it opens in a new tab from Firefox's own side, as the toolbar menu would.
+  // The settings page lists this site with its speed, and forgets just it.
   const savedRate = await run('return window.__speedCtl.inspect().siteRate');
   const pageTab = await driver.getWindowHandle();
-  await driver.setContext(firefox.Context.CHROME);
-  try {
-    await driver.executeScript('gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);', `moz-extension://${extensionUuid}/options.html`);
-  } finally {
-    await driver.setContext(firefox.Context.CONTENT);
-  }
-  const settingsTab = (await driver.getAllWindowHandles()).find((handle) => handle !== pageTab);
-  await driver.switchTo().window(settingsTab);
+  await openExtensionTab('options.html');
+  const shownVersion = await until('return document.getElementById("version").textContent');
+  check(shownVersion === 'Version ' + version, 'the settings page shows the version', shownVersion);
   const site = '127.0.0.1:8767';
   const findRow = `return [...document.querySelectorAll("#sites li")].find((li) => li.textContent.includes("http://${site}"))`;
   const findChannel = 'return [...document.querySelectorAll("#sites li.channel")].find((li) => li.textContent.includes("Jazz Cafe"))';
@@ -253,6 +262,50 @@ try {
   await driver.get(pageUrl);
   const reset = await until('return !!window.__speedCtl && window.__speedCtl.inspect().rate === 1');
   check(!!reset, 'a forgotten site is back to the default speed', await run('return window.__speedCtl && window.__speedCtl.inspect().rate'));
+
+  // "Turn off PSA on 127.0.0.1" at the bottom of the panel: the site joins the sites to skip, and PSA stops in
+  // every frame with the players back to their own speed.
+  await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
+  await driver.actions().sendKeys(']').perform();
+  const sped = await until('return Math.abs(document.getElementById("episode").playbackRate - 1.1) < 0.005');
+  await run('window.__speedCtl.togglePanel();');
+  const offText = await until('const b = document.querySelector("speed-ctl").shadowRoot.querySelector(".off"); return b && b.textContent');
+  check(offText === 'Turn off PSA on 127.0.0.1', 'the panel offers "Turn off PSA on 127.0.0.1"', offText);
+  await run('document.querySelector("speed-ctl").shadowRoot.querySelector(".off").click();');
+  const off = await until('return !window.__speedCtl && !document.querySelector("speed-ctl") && document.getElementById("episode").playbackRate === 1');
+  check(!!sped && !!off, 'turning it off stops PSA and puts the player back to 1×',
+    await run('return [!!window.__speedCtl, document.getElementById("episode").playbackRate].join(" ")'));
+  check(!!(await inFrame('return !window.__speedCtl')), 'it stops in the embedded player too');
+
+  // The toolbar popup, opened in a tab of its own: there, the active tab is its own, which add-ons can't reach.
+  const popupText = 'const b = document.getElementById("box"); return !b.hidden && document.getElementById("title").textContent';
+  await openExtensionTab('popup.html');
+  const blocked = await until(popupText);
+  check(blocked === "PSA can't run on this page", "the popup on a page add-ons can't reach says so", blocked);
+  const pageTabId = await run(
+    'const w = window.wrappedJSObject || window; const b = w.browser || (typeof browser !== "undefined" ? browser : null); return b.tabs.query({}).then((tabs) => tabs.find((t) => t.url.startsWith("http://127.0.0.1")).id);'
+  );
+  await run(`location.href = "popup.html?tab=${pageTabId}";`);
+  const excludedText = await until(popupText + ' === "PSA is off on 127.0.0.1" && document.getElementById("act").textContent');
+  check(excludedText === 'Turn back on', 'the popup for the page says "PSA is off on 127.0.0.1" and offers "Turn back on"', excludedText);
+  await run('document.getElementById("act").click();');
+  const backOn = await until(popupText + ' === "PSA is back on for 127.0.0.1" && document.getElementById("act").textContent');
+  check(backOn === 'Reload', '"Turn back on" takes the site off the list and offers a reload', backOn);
+  await run(`location.href = "popup.html?tab=${pageTabId}&again";`);
+  const needsReload = await until(popupText);
+  check(needsReload === 'Reload to start PSA', 'opened again before the reload, the popup asks for one', needsReload);
+  await driver.close();
+  await driver.switchTo().window(pageTab);
+  await driver.navigate().refresh();
+  const again = await until('return !!window.__speedCtl');
+  check(!!again, 'after the reload PSA runs on the site again');
+
+  // Where PSA runs, the popup steps aside: it shows or hides PSA's panel, as the toolbar button does.
+  await openExtensionTab(`popup.html?tab=${pageTabId}`);
+  await wait(1500);
+  await driver.switchTo().window(pageTab);
+  const toggled = await until('const i = window.__speedCtl.inspect(); return i.shown && !i.minimized');
+  check(!!toggled, 'where PSA runs, the popup opens its panel instead');
 } catch (err) {
   check(false, 'the run stopped', err.message.split('\n')[0]);
 } finally {

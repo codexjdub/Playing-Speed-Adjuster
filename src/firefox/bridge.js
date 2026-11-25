@@ -5,6 +5,8 @@
   const TO_PAGE = 'psa:to-page';
   const FROM_PAGE = 'psa:from-page';
   let init = null;
+  // Whether PSA runs on this page: it didn't start on a site to skip, and "Turn off PSA" stops it.
+  let stopped = false;
 
   const toPage = (message) => document.dispatchEvent(new CustomEvent(TO_PAGE, { detail: JSON.stringify(message) }));
 
@@ -33,7 +35,11 @@
     browser.runtime.sendMessage(message).catch(() => {});
   });
 
+  // The toolbar popup's question, answered here: PSA itself never replies.
   browser.runtime.onMessage.addListener((message) => {
+    if (message && message.type === 'ping') return Promise.resolve(!!init && !stopped);
+    if (message && message.type === 'stop') stopped = true;
     toPage(message);
+    return undefined;
   });
 })();

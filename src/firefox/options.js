@@ -162,5 +162,6 @@ browser.storage.onChanged.addListener((changes, area) => {
   });
   if (keys.length) showSites();
 });
+field('version').textContent = 'Version ' + browser.runtime.getManifest().version;
 load();
 loadSites();

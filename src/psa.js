@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.9.3';
+  const VERSION = '1.10.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1113,6 +1113,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 }
 @keyframes glow-in { from { opacity: 0; } to { opacity: 1; } }
 `;
+  // The extension's own: "Turn off PSA on <site>" at the bottom of the panel.
+  const EXT_CSS = ext
+    ? `
+.off {
+  display: block; width: 100%; margin-top: 8px; padding: 6px 2px 0; border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0; background: transparent; font-size: 11px; text-align: left; opacity: 0.55;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.off:hover, .off:active { background: transparent; opacity: 0.9; }
+`
+    : '';
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const PLAY_PATH = 'M4.5 2.3v11.4c0 .6.6.9 1.1.6l8.6-5.7c.4-.3.4-.9 0-1.2L5.6 1.7c-.5-.3-1.1 0-1.1.6z';
@@ -1181,10 +1192,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   try {
     // Constructed stylesheets aren't blocked by a page's style-src CSP; <style> is the fallback.
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(CSS);
+    sheet.replaceSync(CSS + EXT_CSS);
     shadow.adoptedStyleSheets = [sheet];
   } catch (err) {
-    shadow.append(make('style', null, CSS));
+    shadow.append(make('style', null, CSS + EXT_CSS));
   }
 
   const ui = {};
@@ -1282,6 +1293,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.channel.hidden = true;
 
   ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.channel, ui.note);
+  // The extension: "Turn off PSA on <site>" adds the site to the list of sites to skip (see turnOff).
+  const offSite = ext && ext.top ? location.hostname.replace(/^www\./, '') : '';
+  if (ext && offSite) {
+    const off = button('off', 'Turn off PSA on ' + offSite, null, () => turnOff());
+    off.title = 'Add ' + offSite + ' to the sites to skip. The toolbar button can turn PSA back on.';
+    ui.panel.insertBefore(off, ui.note);
+  }
 
   // The minimized panel: − and + step the speed, the speed opens a menu of common speeds, and the rest of
   // the pill expands it when clicked and moves it when dragged. The blue dot after PSA (as on the icon), the
@@ -2091,12 +2109,34 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       if (badged) updateBadge();
     } else if (message.type === 'toggle') {
       togglePanel();
+    } else if (message.type === 'stop') {
+      standDown();
     } else if (message.type === 'started') {
       embeddedFrom = typeof message.site === 'string' && message.site ? message.site.slice(0, 100) : 'another site';
       embeddedOn = pageNow();
       if (!badged) updateBadge();
       startedPlaying();
     }
+  }
+
+  // Off on this site: the background adds it to the sites to skip and tells every frame of the tab to stop.
+  function turnOff() {
+    ext.send({ type: 'exclude' });
+    standDown();
+  }
+
+  // Stopping for good on this page: the players go back to their own speed, then PSA closes.
+  function standDown() {
+    if (!alive) return;
+    const list = mediaList;
+    destroy();
+    list.forEach((el) => {
+      if (!touched.has(el)) return;
+      safely(() => {
+        el.defaultPlaybackRate = 1;
+        el.playbackRate = 1;
+      });
+    });
   }
 
   // The page's address without its #fragment. A new one (a single-page site changing pages) forgets the

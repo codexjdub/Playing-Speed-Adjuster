@@ -84,7 +84,17 @@ writeFileSync(
   join(firefox, 'manifest.json'),
   readFileSync(join(firefoxSrc, 'manifest.json'), 'utf8').replace('%VERSION%', version)
 );
-['background.js', 'bridge.js', 'defaults.js', 'options.html', 'options.js', 'icon.svg'].forEach((name) =>
+[
+  'background.js',
+  'bridge.js',
+  'defaults.js',
+  'options.html',
+  'options.js',
+  'popup.html',
+  'popup.js',
+  'icon.svg',
+  'icon-light.svg',
+].forEach((name) =>
   copyFileSync(join(firefoxSrc, name), join(firefox, name))
 );
 

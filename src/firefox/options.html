@@ -5,12 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PSA settings</title>
 <style>
-  :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #5d6066; --line: #e2e2dc; --accent: #1a66d2; }
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1d1d1f; --muted: #5d6066; --line: #e2e2dc; --accent: #1a66d2; }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #1c1c1f; --fg: #f2f2f2; --muted: #a3a3aa; --line: #34343a; --accent: #5ea8ff; }
   }
-  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  fieldset { border: 0; padding: 0; margin: 0 0 18px; }
+  body { margin: 0; padding: 16px 16px 24px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; }
+  header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 4px; }
+  header h1 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 18px; }
+  header h1 i { width: 8px; height: 8px; border-radius: 50%; background: #5ea8ff; }
+  #version { color: var(--muted); font-size: 13px; }
+  .intro { margin: 0 0 20px; color: var(--muted); }
+  a { color: var(--accent); }
+  section { padding: 16px 0 4px; border-top: 1px solid var(--line); }
+  h2 { margin: 0 0 10px; font-size: 15px; }
+  section label.title { font-weight: 400; }
+  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+  label.check + label.check { margin-top: 6px; }
   legend, .title { font-weight: 600; display: block; margin: 0 0 4px; font-size: inherit; }
   .hint { color: var(--muted); margin: 2px 0 0; font-size: 13px; }
   input[type="number"] { width: 6em; }
@@ -31,31 +42,47 @@
 </style>
 </head>
 <body>
+<main>
+  <header>
+    <h1>PSA<i></i></h1>
+    <span id="version"></span>
+  </header>
+  <p class="intro">Playing Speed Adjuster speeds up the audio and video on any page. Changes here are saved as you make them. <a href="https://codexjdub.github.io/Playing-Speed-Adjuster/" target="_blank" rel="noopener">About PSA</a></p>
   <form id="options">
-    <fieldset>
-      <label class="title" for="defaultRate">Speed on sites without one of their own</label>
-      <input id="defaultRate" type="number" min="0.25" max="4" step="0.05" required>
-      <p class="hint">Each site remembers the speed you set there; this one is for the rest.</p>
-    </fieldset>
-    <fieldset>
-      <label class="check"><input id="autoShow" type="checkbox"> Show the small speed pill when something starts playing with sound</label>
-      <label class="check"><input id="shortcuts" type="checkbox"> Keyboard shortcuts on pages with audio or video: [ slower, ] faster, \ 1.5× or back to 1×</label>
-    </fieldset>
-    <fieldset>
-      <label class="title" for="excluded">Sites to leave alone</label>
-      <textarea id="excluded" spellcheck="false" placeholder="meet.google.com"></textarea>
-      <p class="hint">One per line, as a name like the one above or a page's address. A site includes its subdomains. Reload a page for a change to apply there.</p>
-    </fieldset>
+    <section aria-labelledby="speed-title">
+      <h2 id="speed-title">Speed</h2>
+      <fieldset>
+        <label class="title" for="defaultRate">Speed on sites without one of their own</label>
+        <input id="defaultRate" type="number" min="0.25" max="4" step="0.05" required>
+        <p class="hint">Each site remembers the speed you set there; this one is for the rest.</p>
+      </fieldset>
+    </section>
+    <section aria-labelledby="pill-title">
+      <h2 id="pill-title">Pill and keys</h2>
+      <fieldset>
+        <label class="check"><input id="autoShow" type="checkbox"> Show the small speed pill when something starts playing with sound</label>
+        <label class="check"><input id="shortcuts" type="checkbox"> Keyboard shortcuts on pages with audio or video: [ slower, ] faster, \ 1.5× or back to 1×</label>
+      </fieldset>
+    </section>
+    <section aria-labelledby="skip-title">
+      <h2 id="skip-title">Sites to skip</h2>
+      <fieldset>
+        <label class="title" for="excluded">PSA stays off on these sites</label>
+        <textarea id="excluded" spellcheck="false" placeholder="meet.google.com"></textarea>
+        <p class="hint">One per line, as a name like the one above or a page's address. A site includes its subdomains. "Turn off PSA on …" at the bottom of the panel adds one. Reload a page for a change to apply there.</p>
+      </fieldset>
+    </section>
   </form>
   <section aria-labelledby="saved-title">
-    <h2 id="saved-title" class="title">Saved sites</h2>
+    <h2 id="saved-title">Saved sites</h2>
     <p class="hint">Each site's speed and the places saved in its recordings, with any YouTube channels that keep a speed of their own under the site. A tab that is already open keeps them until it is reloaded.</p>
     <ul id="sites" class="sites"></ul>
+    <p>
+      <button id="forget" type="button">Forget saved speeds and places</button>
+      <span id="status" role="status"></span>
+    </p>
   </section>
-  <p>
-    <button id="forget" type="button">Forget saved speeds and places</button>
-    <span id="status" role="status"></span>
-  </p>
+</main>
   <script src="defaults.js"></script>
   <script src="options.js"></script>
 </body>
