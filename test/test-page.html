@@ -565,13 +565,13 @@
       check(reducedMotion || (pill.classList.contains('pulse') && dotAnimation === 'dot-pulse' && dotPulses === '1' && getComputedStyle(pill).animationName === 'none'),
         "the pill's dot glows once when the pill appears", 'dot ' + dotAnimation + ' × ' + dotPulses + ', pill ' + getComputedStyle(pill).animationName);
 
-      // The pill's − and + step by 0.1, and its speed opens a menu of common speeds.
+      // The pill's − and + step by 0.05, and its speed opens a menu of common speeds.
       const beforeStep = ctl.inspect().rate;
       pill.querySelector('[aria-label^="Faster"]').click();
-      check(Math.abs(ctl.inspect().rate - Math.min(4, beforeStep + 0.1)) < 0.005, "the pill's + speeds up by 0.1",
+      check(Math.abs(ctl.inspect().rate - Math.min(4, beforeStep + 0.05)) < 0.005, "the pill's + speeds up by 0.05",
         beforeStep + ' → ' + ctl.inspect().rate);
       pill.querySelector('[aria-label^="Slower"]').click();
-      check(Math.abs(ctl.inspect().rate - beforeStep) < 0.005, "the pill's − slows down by 0.1", '→ ' + ctl.inspect().rate);
+      check(Math.abs(ctl.inspect().rate - beforeStep) < 0.005, "the pill's − slows down by 0.05", '→ ' + ctl.inspect().rate);
       // Scrolling over the pill steps the speed: a mouse wheel's notch is one step, a trackpad's small scrolls add up.
       const wheel = (deltaY) => {
         const event = new WheelEvent('wheel', { deltaY, deltaMode: 0, bubbles: true, cancelable: true, composed: true });
@@ -580,12 +580,12 @@
       };
       const beforeWheel = ctl.inspect().rate;
       const wheelKept = wheel(-100);
-      check(wheelKept && Math.abs(ctl.inspect().rate - Math.min(4, beforeWheel + 0.1)) < 0.005,
-        "scrolling up over the pill speeds up by 0.1, without scrolling the page", beforeWheel + ' → ' + ctl.inspect().rate);
+      check(wheelKept && Math.abs(ctl.inspect().rate - Math.min(4, beforeWheel + 0.05)) < 0.005,
+        "scrolling up over the pill speeds up by 0.05, without scrolling the page", beforeWheel + ' → ' + ctl.inspect().rate);
       wheel(30);
       const afterOne = ctl.inspect().rate;
       wheel(30);
-      check(Math.abs(afterOne - Math.min(4, beforeWheel + 0.1)) < 0.005 && Math.abs(ctl.inspect().rate - beforeWheel) < 0.005,
+      check(Math.abs(afterOne - Math.min(4, beforeWheel + 0.05)) < 0.005 && Math.abs(ctl.inspect().rate - beforeWheel) < 0.005,
         'small scrolls down add up to one step', afterOne + ' → ' + ctl.inspect().rate);
       await wait(450);
       const pillMenu = pill.querySelector('.pill-menu');
@@ -791,9 +791,9 @@
       const press = (key, on = document.body) => on.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true }));
       const start = ctl.inspect().rate;
       press(']');
-      check(Math.abs(ctl.inspect().rate - Math.min(4, start + 0.1)) < 0.005, '] speeds up by 0.1', start + ' → ' + ctl.inspect().rate);
+      check(Math.abs(ctl.inspect().rate - Math.min(4, start + 0.05)) < 0.005, '] speeds up by 0.05', start + ' → ' + ctl.inspect().rate);
       press('[');
-      check(Math.abs(ctl.inspect().rate - start) < 0.005, '[ slows down by 0.1', '→ ' + ctl.inspect().rate);
+      check(Math.abs(ctl.inspect().rate - start) < 0.005, '[ slows down by 0.05', '→ ' + ctl.inspect().rate);
       press('\\');
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, '\\ sets 1.5×', '→ ' + ctl.inspect().rate);
       press('\\');

@@ -10,7 +10,7 @@ PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` a
 - Keeps re-applying the speed so sites that reset `playbackRate` don't win.
 - Play/Pause, −10 s / +20 s skips, a best-effort title and the real time left at your speed for the active item (the one that most recently started playing), plus a picture-in-picture button for videos. Use ‹ › to pick another item; the one you pick is outlined on the page, and scrolled into view if needed.
 - Live streams (live radio, anything without an end) stay at normal speed, since speeding them up only causes buffering.
-- Drag the panel by its top bar, or minimize it (or double-click the bar) to a small pill, remembered per site. The pill is just a blue dot and the speed until you point at it (or tab to it, or open its menu); then it shows PSA, − and + for 0.1 steps, a menu of common speeds behind the speed (which also drags the pill when pressed and moved; scrolling over the pill steps the speed), and the dot glows briefly when the pill appears or the speed changes, so it's easy to spot. In fullscreen it has a spot of its own: the top-left corner until you drag it during fullscreen, then wherever you left it (per site). There PSA fades away after 3 s without mouse movement, coming back when you move the mouse or the speed changes. While the mouse is over an embedded player, where PSA can't see it move, it doesn't fade. It stays open until you click × or run the bookmarklet again, and stays on top of fullscreen video and the page's own dialogs and popovers.
+- Drag the panel by its top bar, or minimize it (or double-click the bar) to a small pill, remembered per site. The pill is just a blue dot and the speed until you point at it (or tab to it, or open its menu); then it shows PSA, − and + for 0.05 steps, a menu of common speeds behind the speed (which also drags the pill when pressed and moved; scrolling over the pill steps the speed), and the dot glows briefly when the pill appears or the speed changes, so it's easy to spot. In fullscreen it has a spot of its own: the top-left corner until you drag it during fullscreen, then wherever you left it (per site). There PSA fades away after 3 s without mouse movement, coming back when you move the mouse or the speed changes. While the mouse is over an embedded player, where PSA can't see it move, it doesn't fade. It stays open until you click × or run the bookmarklet again, and stays on top of fullscreen video and the page's own dialogs and popovers.
 
 ## Install
 
@@ -34,8 +34,8 @@ While the panel is open, including minimized:
 
 | Key | Action |
 | --- | --- |
-| `[` | Slow down by 0.1 |
-| `]` | Speed up by 0.1 |
+| `[` | Slow down by 0.05 |
+| `]` | Speed up by 0.05 |
 | `\` | Set 1.5×, or back to 1× if already at 1.5× |
 
 Unless the full panel is open, the new speed also flashes big over the player for a moment. Scrolling over the pill steps the speed the same way.

@@ -126,30 +126,30 @@ try {
   // Every speed message the page's PSA receives, to send one again later.
   await run('window.__rateMessages = []; document.addEventListener("psa:to-page", (e) => { if (JSON.parse(e.detail).type === "rate") window.__rateMessages.push(e.detail); });');
 
-  // A real key press: ] speeds up by 0.1 in the page, and the embedded player and the same-site frame follow.
+  // A real key press: ] speeds up by 0.05 in the page, and the embedded player and the same-site frame follow.
   await run('document.getElementById("episode").pause(); document.activeElement && document.activeElement.blur && document.activeElement.blur();');
   await driver.actions().sendKeys(']').perform();
-  const pageRate = await until('const r = document.getElementById("episode").playbackRate; return Math.abs(r - 1.6) < 0.005 && r');
-  check(!!pageRate, '] speeds up the page to 1.6×', await run('return document.getElementById("episode").playbackRate'));
-  const frameRate = await inFrame('const r = document.getElementById("embedded").playbackRate; return Math.abs(r - 1.6) < 0.005 && r');
-  check(!!frameRate, 'the embedded player follows to 1.6×');
+  const pageRate = await until('const r = document.getElementById("episode").playbackRate; return Math.abs(r - 1.55) < 0.005 && r');
+  check(!!pageRate, '] speeds up the page to 1.55×', await run('return document.getElementById("episode").playbackRate'));
+  const frameRate = await inFrame('const r = document.getElementById("embedded").playbackRate; return Math.abs(r - 1.55) < 0.005 && r');
+  check(!!frameRate, 'the embedded player follows to 1.55×');
   const sameSite = await until(
-    'const f = document.getElementById("same"); const a = f.contentDocument.getElementById("inner"); return !!a && Math.abs(a.playbackRate - 1.6) < 0.005 && f.contentWindow.__speedCtl === undefined'
+    'const f = document.getElementById("same"); const a = f.contentDocument.getElementById("inner"); return !!a && Math.abs(a.playbackRate - 1.55) < 0.005 && f.contentWindow.__speedCtl === undefined'
   );
-  check(!!sameSite, "a same-site frame's player follows to 1.6× without a PSA of its own",
+  check(!!sameSite, "a same-site frame's player follows to 1.55× without a PSA of its own",
     await run('const f = document.getElementById("same"); return [f.contentDocument.getElementById("inner").playbackRate, !!f.contentWindow.__speedCtl].join(" ")'));
 
   // The background passes each speed to every frame, the one it came from too, possibly after newer presses.
   await until('return window.__rateMessages.length > 0');
   await driver.actions().sendKeys(']').perform();
-  await until('return Math.abs(window.__speedCtl.inspect().rate - 1.7) < 0.005');
+  await until('return Math.abs(window.__speedCtl.inspect().rate - 1.6) < 0.005');
   await run('document.dispatchEvent(new CustomEvent("psa:to-page", { detail: window.__rateMessages[0] }));');
   await wait(500);
   const kept = await run('return window.__speedCtl.inspect().rate');
-  check(Math.abs(kept - 1.7) < 0.005, "a late copy of the page's own speed change doesn't take the speed back", kept);
+  check(Math.abs(kept - 1.6) < 0.005, "a late copy of the page's own speed change doesn't take the speed back", kept);
 
   await driver.navigate().refresh();
-  const remembered = await until('return window.__speedCtl && Math.abs(window.__speedCtl.inspect().rate - 1.7) < 0.005');
+  const remembered = await until('return window.__speedCtl && Math.abs(window.__speedCtl.inspect().rate - 1.6) < 0.005');
   check(!!remembered, 'the speed is remembered after a reload', await run('return window.__speedCtl && window.__speedCtl.inspect().rate'));
 
   // Through the background to the page's frame, the same way as the toolbar button's message.
@@ -175,7 +175,7 @@ try {
   const flashed = await until(
     'const s = document.querySelector("speed-ctl"); return !!s && s.classList.contains("flash-only") && !s.shadowRoot.querySelector(".flash").hidden && s.shadowRoot.querySelector(".flash").textContent'
   , 1500);
-  check(flashed === '1.80×', 'hidden, a key flashes the new speed on its own', flashed);
+  check(flashed === '1.65×', 'hidden, a key flashes the new speed on its own', flashed);
   await driver.actions().sendKeys('[').perform();
   const flashGone = await until('return !document.querySelector("speed-ctl") && window.__speedCtl.inspect().shown === false', 4000);
   check(!!flashGone, 'after the flash PSA is out of sight again');
@@ -229,7 +229,7 @@ try {
   );
   await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
   await driver.actions().sendKeys(']').perform();
-  const faster = Math.round((siteRate + 0.1) * 100) / 100;
+  const faster = Math.round((siteRate + 0.05) * 100) / 100;
   const embedOnlyRate = await inFrame(`const r = document.getElementById("embedded").playbackRate; return Math.abs(r - ${faster}) < 0.005 && r`);
   check(!!embedOnlyRate, '] on that page speeds up the embedded player to ' + faster + '×');
   await run('history.pushState(null, "", location.href + "&moved");');
@@ -256,7 +256,7 @@ try {
   await openExtensionTab('options.html');
   const shownVersion = await until('return document.getElementById("version").textContent');
   check(shownVersion === 'Version ' + version, 'the settings page shows the version', shownVersion);
-  // Playing at 1.6× and 1.7× above saved some time, sent when each page was left.
+  // Playing at 1.55× and 1.6× above saved some time, sent when each page was left.
   const timeSaved = await until('const t = document.getElementById("monthSaved").textContent; return t !== "0 min" && t');
   check(!!timeSaved, 'the settings page shows the time saved this month', timeSaved);
   const site = '127.0.0.1:8767';
@@ -282,7 +282,7 @@ try {
   // every frame with the players back to their own speed.
   await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
   await driver.actions().sendKeys(']').perform();
-  const sped = await until('return Math.abs(document.getElementById("episode").playbackRate - 1.1) < 0.005');
+  const sped = await until('return Math.abs(document.getElementById("episode").playbackRate - 1.05) < 0.005');
   await run('window.__speedCtl.togglePanel();');
   const offText = await until('const b = document.querySelector("speed-ctl").shadowRoot.querySelector(".off"); return b && b.textContent');
   check(offText === 'Turn off PSA on 127.0.0.1', 'the panel offers "Turn off PSA on 127.0.0.1"', offText);
@@ -346,8 +346,8 @@ try {
   check(!!welcomePill, 'on the welcome page, playing the sample shows the pill');
   await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
   await driver.actions().sendKeys(']').perform();
-  const welcomeRate = await until('const r = document.getElementById("sample").playbackRate; const f = document.querySelector("speed-ctl").shadowRoot.querySelector(".flash"); return Math.abs(r - 1.1) < 0.005 && !f.hidden && f.textContent');
-  check(welcomeRate === '1.10×', '] speeds the sample up to 1.1× and flashes it', welcomeRate);
+  const welcomeRate = await until('const r = document.getElementById("sample").playbackRate; const f = document.querySelector("speed-ctl").shadowRoot.querySelector(".flash"); return Math.abs(r - 1.05) < 0.005 && !f.hidden && f.textContent');
+  check(welcomeRate === '1.05×', '] speeds the sample up to 1.05× and flashes it', welcomeRate);
   const welcomeKeys = await run(
     'return (window.wrappedJSObject || window).browser.storage.local.get(null).then((all) => Object.keys(all).filter((k) => k.includes("moz-extension")).join(" "));'
   );
@@ -372,7 +372,7 @@ try {
   if (newsTab) {
     await driver.switchTo().window(newsTab);
     const newsText = await until('const n = document.getElementById("news"); return n && !n.hidden && document.querySelector("h1").textContent + " / " + n.querySelectorAll("li").length');
-    check(newsText === "What's new in PSA " + version + ' / 4', "the tab shows what's new in this version", newsText);
+    check(newsText === "What's new in PSA " + version + ' / 5', "the tab shows what's new in this version", newsText);
     const cleared = await run('return (window.wrappedJSObject || window).browser.storage.local.get("news").then((o) => !o.news);');
     check(cleared === true, 'the news is cleared once seen', cleared);
     await driver.close();

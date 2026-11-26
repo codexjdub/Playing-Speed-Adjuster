@@ -33,11 +33,11 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.13.0';
+  const VERSION = '1.13.1';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
-  const KEY_STEP = 0.1;
+  const KEY_STEP = 0.05;
   // Keyboard shortcuts while the panel is open: a speed change, or a fixed speed and, pressed again, back to normal.
   const KEYS = { '[': { by: -KEY_STEP }, ']': { by: KEY_STEP }, '\\': { to: 1.5, back: 1 } };
   const PRESETS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
