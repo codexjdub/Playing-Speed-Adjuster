@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.11.0';
+  const VERSION = '1.12.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -654,6 +654,71 @@
     event.stopImmediatePropagation();
     if (key.to === undefined) setRate(rate + key.by);
     else setRate(Math.abs(rate - key.to) < 0.005 ? key.back : key.to);
+    flashRate();
+  }
+
+  // ---- The speed flash and rolling numbers ------------------------------------------------------
+
+  // A new speed slides in: up from below when faster, down from above when slower.
+  function roll(node, text) {
+    if (node.textContent === text) return;
+    const was = parseFloat(node.textContent);
+    node.textContent = text;
+    if (!(was > 0)) return;
+    node.classList.remove('up', 'down');
+    void node.offsetWidth; // restarts the animation
+    node.classList.add(parseFloat(text) > was ? 'up' : 'down');
+  }
+
+  let flashing = false;
+  let flashTimer = 0;
+
+  // Over the middle of the player that is being looked after, or of the window when it can't be seen.
+  function flashRate() {
+    if ((ext && !ext.top) || (shown && !minimized)) return;
+    const view = viewport();
+    let x = view.width / 2;
+    let y = view.height / 2;
+    const node = target && target.isConnected ? visibleNode(target) : null;
+    if (node) {
+      const box = viewportRect(node);
+      const midX = box.left + box.width / 2;
+      const midY = box.top + box.height / 2;
+      if (box.width > 0 && box.height > 0 && midX > 0 && midX < view.width && midY > 0 && midY < view.height) {
+        x = midX;
+        y = midY;
+      }
+    }
+    ui.flash.style.left = x + 'px';
+    ui.flash.style.top = y + 'px';
+    const text = formatRate(rate);
+    if (ui.flash.hidden) ui.flashText.textContent = text;
+    else roll(ui.flashText, text);
+    // With PSA out of sight (the extension), only the flash shows.
+    if (ext && !shown) {
+      flashing = true;
+      host.classList.add('flash-only');
+      mount(true);
+    }
+    ui.flash.hidden = false;
+    void ui.flash.offsetWidth;
+    ui.flash.classList.add('on');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      ui.flash.classList.remove('on');
+      flashTimer = setTimeout(endFlash, 320);
+    }, 800);
+  }
+
+  function endFlash() {
+    ui.flash.hidden = true;
+    if (!ext || !flashing) return;
+    host.classList.remove('flash-only');
+    flashing = false;
+    if (!shown) {
+      if (canPopover) safely(() => host.hidePopover());
+      host.remove();
+    }
   }
 
   function discoverRoots() {
@@ -976,7 +1041,7 @@
 :host { all: initial; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.panel, .pill {
+.panel, .pill, .flash {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased; -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
 }
@@ -1115,6 +1180,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   animation: glow-in 0.15s ease-out;
 }
 @keyframes glow-in { from { opacity: 0; } to { opacity: 1; } }
+.roll { display: inline-block; }
+.roll.up { animation: roll-up 0.22s ease-out; }
+.roll.down { animation: roll-down 0.22s ease-out; }
+@keyframes roll-up { from { transform: translateY(0.55em); opacity: 0; } }
+@keyframes roll-down { from { transform: translateY(-0.55em); opacity: 0; } }
+.flash {
+  position: fixed; transform: translate(-50%, -50%); padding: 10px 22px; border-radius: 18px; pointer-events: none;
+  font-size: 30px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: #f5f5f7;
+  background: rgba(30, 30, 33, 0.8); border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); opacity: 0; transition: opacity 0.3s ease;
+}
+.flash.on { opacity: 1; transition-duration: 0.08s; }
+@media (prefers-reduced-motion: reduce) { .roll.up, .roll.down { animation: none; } }
 `;
   // The extension's own: "Turn off PSA on <site>" at the bottom of the panel.
   const EXT_CSS = ext
@@ -1125,6 +1203,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .off:hover, .off:active { background: transparent; color: rgba(245, 245, 247, 0.85); }
+:host(.flash-only) .panel, :host(.flash-only) .pill { display: none !important; }
 `
     : '';
 
@@ -1252,6 +1331,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   ui.resume.hidden = true;
 
   ui.readout = button('readout', '', 'Click to type a speed. Keys: [ slower, ] faster, \\ 1.5× or back to 1×', () => openEntry());
+  ui.readoutText = make('span', 'roll');
+  ui.readout.append(ui.readoutText);
   ui.entry = make('input', 'entry');
   ui.entry.type = 'text';
   ui.entry.inputMode = 'decimal';
@@ -1297,7 +1378,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   ui.panel.append(ui.bar, meta, ui.resume, transport, speed, presetRow, ui.channel, ui.note);
   // The extension: "Turn off PSA on <site>" adds the site to the list of sites to skip (see turnOff).
-  const offSite = ext && ext.top ? location.hostname.replace(/^www\./, '') : '';
+  const offSite = ext && ext.top && /^https?:$/.test(location.protocol) ? location.hostname.replace(/^www\./, '') : '';
   if (ext && offSite) {
     const off = button('off', 'Turn off PSA on ' + offSite, null, () => turnOff());
     off.title = 'Add ' + offSite + ' to the sites to skip. The toolbar button can turn PSA back on.';
@@ -1320,7 +1401,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       setMinimized(false);
     }
   });
-  ui.pillRateText = make('span', null);
+  ui.pillRateText = make('span', 'roll');
   ui.pillRate = button('pill-rate', null, null, () => togglePillMenu());
   ui.pillRate.setAttribute('aria-haspopup', 'menu');
   ui.pillRate.setAttribute('aria-expanded', 'false');
@@ -1361,7 +1442,28 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       ui.pillRate.focus();
     }
   });
-  ui.pill.addEventListener('animationend', () => ui.pill.classList.remove('pulse'));
+  ui.pill.addEventListener('animationend', (event) => {
+    if (event.animationName === 'dot-pulse') ui.pill.classList.remove('pulse');
+  });
+  // Scrolling over the pill steps the speed like [ and ]: one step for each notch of a mouse wheel, or for
+  // each 50 px of a trackpad's scrolling.
+  let wheelSum = 0;
+  let wheelTimer = 0;
+  ui.pill.addEventListener(
+    'wheel',
+    (event) => {
+      event.preventDefault();
+      wheelSum += event.deltaMode ? Math.sign(event.deltaY) * 50 : Math.max(-50, Math.min(50, event.deltaY));
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => (wheelSum = 0), 400);
+      while (Math.abs(wheelSum) >= 50) {
+        const faster = wheelSum < 0;
+        wheelSum += faster ? 50 : -50;
+        setRate(rate + (faster ? KEY_STEP : -KEY_STEP));
+      }
+    },
+    { passive: false }
+  );
   // The pill is just the blue dot and the speed, and grows to the full pill while the pointer is on it, it has
   // keyboard focus or its menu is open. It grows on both sides of the speed, which stays where it was, under
   // the pointer: `grownBy` is how far its left edge then reaches past its spot. Near the window's edges it
@@ -1395,7 +1497,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 
   ui.panel.hidden = minimized;
   ui.pill.hidden = !minimized;
-  shadow.append(ui.panel, ui.pill, ui.glow);
+  // The speed, shown big over the player for a moment when a key changes it with the full panel closed.
+  ui.flash = make('div', 'flash');
+  ui.flashText = make('span', 'roll');
+  ui.flash.append(ui.flashText);
+  ui.flash.hidden = true;
+  ui.flash.setAttribute('aria-hidden', 'true');
+  shadow.append(ui.panel, ui.pill, ui.glow, ui.flash);
 
   // Keep the panel's keystrokes and clicks away from page shortcuts (YouTube's "k", digits, etc.).
   ['keydown', 'keyup', 'keypress', 'click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach(
@@ -1557,8 +1665,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
       // The panel just got taller or shorter; keep it on screen.
       placeHost();
     }
-    setText(ui.readout, formatRate(rate));
-    setText(ui.pillRateText, formatRate(rate));
+    roll(ui.readoutText, formatRate(rate));
+    roll(ui.pillRateText, formatRate(rate));
     const pillLabel = 'Speed ' + formatRate(rate) + ': choose another';
     if (ui.pillRate.getAttribute('aria-label') !== pillLabel) ui.pillRate.setAttribute('aria-label', pillLabel);
     speedLists.forEach(({ items, state }) =>
@@ -1983,7 +2091,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   const noRoom = new WeakSet(); // fullscreen elements that don't show what is put in them
 
   function mount(deep) {
-    if (!shown) return;
+    if (!shown && !flashing) return;
     let parent = document.documentElement;
     const fs = fullscreenElement();
     // While something is fullscreen, Chrome lets the mouse reach only what is inside it, and without popover
@@ -2041,6 +2149,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   function showUi(min) {
     if (!ext || !ext.top) return;
     shown = true;
+    flashing = false;
+    host.classList.remove('flash-only');
     setMinimized(min);
     mount(true);
     placeHost();
@@ -2093,6 +2203,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     showUi(true);
   }
 
+  // ---- Time saved (the extension) ----
+  // Playing faster than 1× saves the difference between the time played and the time it took. Each look
+  // compares a player's position with the last one: a seek or a jump makes it move further than playing
+  // could, and doesn't count. With several playing at once, only the one saving most counts. The total goes
+  // to the background in whole seconds, every 30 s saved and when the page is hidden or left.
+  const lastSeen = ext ? new WeakMap() : null; // player -> [position, time]
+  let savedUp = 0;
+  function countSaved() {
+    const now = Date.now();
+    let best = 0;
+    mediaList.forEach((el) => {
+      const was = lastSeen.get(el);
+      const at = el.currentTime;
+      lastSeen.set(el, [at, now]);
+      if (!was || el.paused || el.muted || !(el.volume > 0) || isLive(el)) return;
+      const speed = el.playbackRate;
+      const played = at - was[0];
+      if (speed > 1 && played > 0 && played <= ((now - was[1]) / 1000) * speed + 1) best = Math.max(best, played - played / speed);
+    });
+    savedUp += best;
+    if (savedUp >= 30) sendSaved();
+  }
+  function sendSaved() {
+    const seconds = Math.floor(savedUp);
+    if (seconds < 1) return;
+    savedUp -= seconds;
+    ext.send({ type: 'saved', seconds });
+  }
+
   // The toolbar badge shows the speed once the page has something to play.
   function updateBadge() {
     if (!ext || !ext.top || (!mediaList.length && !embeddedFrom)) return;
@@ -2131,6 +2270,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // Stopping for good on this page: the players go back to their own speed, then PSA closes.
   function standDown() {
     if (!alive) return;
+    sendSaved();
     const list = mediaList;
     destroy();
     list.forEach((el) => {
@@ -2192,12 +2332,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     });
     if (ext && embeddedFrom && embeddedOn !== pageNow()) embeddedFrom = '';
     if (ext && !badged) updateBadge();
+    if (ext) countSaved();
     render();
   }
 
   // Leaving or hiding the page saves every position now, since the next tick may never come.
   function savePositions() {
     mediaList.forEach((el) => notePosition(el, true));
+    if (ext) sendSaved();
   }
 
   function scheduleRefresh() {
@@ -2233,6 +2375,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
     alive = false;
     clearInterval(timer);
     clearTimeout(noteTimer);
+    clearTimeout(flashTimer);
     cancelAnimationFrame(glowFrame);
     roots.forEach((undo) => safely(undo));
     roots.clear();

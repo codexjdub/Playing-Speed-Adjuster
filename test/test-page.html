@@ -572,6 +572,22 @@
         beforeStep + ' → ' + ctl.inspect().rate);
       pill.querySelector('[aria-label^="Slower"]').click();
       check(Math.abs(ctl.inspect().rate - beforeStep) < 0.005, "the pill's − slows down by 0.1", '→ ' + ctl.inspect().rate);
+      // Scrolling over the pill steps the speed: a mouse wheel's notch is one step, a trackpad's small scrolls add up.
+      const wheel = (deltaY) => {
+        const event = new WheelEvent('wheel', { deltaY, deltaMode: 0, bubbles: true, cancelable: true, composed: true });
+        pill.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      const beforeWheel = ctl.inspect().rate;
+      const wheelKept = wheel(-100);
+      check(wheelKept && Math.abs(ctl.inspect().rate - Math.min(4, beforeWheel + 0.1)) < 0.005,
+        "scrolling up over the pill speeds up by 0.1, without scrolling the page", beforeWheel + ' → ' + ctl.inspect().rate);
+      wheel(30);
+      const afterOne = ctl.inspect().rate;
+      wheel(30);
+      check(Math.abs(afterOne - Math.min(4, beforeWheel + 0.1)) < 0.005 && Math.abs(ctl.inspect().rate - beforeWheel) < 0.005,
+        'small scrolls down add up to one step', afterOne + ' → ' + ctl.inspect().rate);
+      await wait(450);
       const pillMenu = pill.querySelector('.pill-menu');
       // Small (the dot and the speed) until the pointer, keyboard focus or its open menu makes it the full pill.
       const pillMinus = pill.querySelector('[aria-label^="Slower"]');
@@ -797,6 +813,24 @@
       closedInput.blur();
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ']', metaKey: true, bubbles: true, cancelable: true }));
       check(Math.abs(ctl.inspect().rate - 1.5) < 0.005, 'keys with ⌘ are left to the browser', 'rate ' + ctl.inspect().rate);
+      // With the full panel open the speed rolls to its new value; with the pill, a key also flashes it over the player.
+      const flash = panel.querySelector('.flash');
+      const readoutRoll = panel.querySelector('.readout .roll');
+      press(']');
+      check(flash.hidden && readoutRoll.classList.contains('up'), "with the panel open a key doesn't flash the speed, and a faster speed rolls up",
+        'flash hidden ' + flash.hidden + ', ' + readoutRoll.className);
+      press('[');
+      check(readoutRoll.classList.contains('down'), 'a slower speed rolls down', readoutRoll.className);
+      panel.querySelector('[aria-label="Minimize"]').click();
+      await wait(50);
+      press(']');
+      check(!flash.hidden && flash.classList.contains('on') && flash.textContent === ctl.inspect().rate.toFixed(2) + '×',
+        'with the pill, a key flashes the new speed', flash.hidden + ' ' + flash.className + ' "' + flash.textContent + '"');
+      press('[');
+      await wait(1400);
+      check(flash.hidden, 'the flash goes away by itself');
+      panel.querySelector('.pill-name').click();
+      await wait(50);
       document.removeEventListener('keydown', countKeys);
 
       progress('channels');

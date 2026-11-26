@@ -13,6 +13,8 @@
   h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
   p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
   .actions { display: flex; gap: 8px; }
+  .saved { margin: 14px -16px -16px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; }
+  .saved b { color: var(--fg); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -24,7 +26,9 @@
       <button id="act" class="primary" type="button"></button>
       <button id="settings" type="button">Settings</button>
     </div>
+    <p id="saved" class="saved" hidden></p>
   </main>
+  <script src="saved-time.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

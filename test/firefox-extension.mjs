@@ -168,6 +168,18 @@ try {
   const stayedHidden = await run('return window.__speedCtl.inspect().shown === false && !document.getElementById("episode").paused');
   check(stayedHidden, 'hidden with the toolbar button, it stays hidden when something plays');
 
+  // A key still flashes the new speed over the page, without the panel or the pill, and then PSA is out of
+  // sight again.
+  await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
+  await driver.actions().sendKeys(']').perform();
+  const flashed = await until(
+    'const s = document.querySelector("speed-ctl"); return !!s && s.classList.contains("flash-only") && !s.shadowRoot.querySelector(".flash").hidden && s.shadowRoot.querySelector(".flash").textContent'
+  , 1500);
+  check(flashed === '1.80×', 'hidden, a key flashes the new speed on its own', flashed);
+  await driver.actions().sendKeys('[').perform();
+  const flashGone = await until('return !document.querySelector("speed-ctl") && window.__speedCtl.inspect().shown === false', 4000);
+  check(!!flashGone, 'after the flash PSA is out of sight again');
+
   // Faded out of sight in fullscreen while hidden (simulated fullscreen), it is visible again when shown.
   await run(
     'Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => document.getElementById("episode") }); document.dispatchEvent(new Event("fullscreenchange"));'
@@ -244,6 +256,9 @@ try {
   await openExtensionTab('options.html');
   const shownVersion = await until('return document.getElementById("version").textContent');
   check(shownVersion === 'Version ' + version, 'the settings page shows the version', shownVersion);
+  // Playing at 1.6× and 1.7× above saved some time, sent when each page was left.
+  const timeSaved = await until('const t = document.getElementById("monthSaved").textContent; return t !== "0 min" && t');
+  check(!!timeSaved, 'the settings page shows the time saved this month', timeSaved);
   const site = '127.0.0.1:8767';
   const findRow = `return [...document.querySelectorAll("#sites li")].find((li) => li.textContent.includes("http://${site}"))`;
   const findChannel = 'return [...document.querySelectorAll("#sites li.channel")].find((li) => li.textContent.includes("Jazz Cafe"))';
@@ -321,6 +336,24 @@ try {
   await driver.switchTo().window(pageTab);
   const toggled = await until('const i = window.__speedCtl.inspect(); return i.shown && !i.minimized');
   check(!!toggled, 'where PSA runs, the popup opens its panel instead');
+
+  // The welcome page runs PSA on its sample: playing shows the pill, ] speeds it up with a flash, and nothing
+  // is saved for the page.
+  await openExtensionTab('welcome.html');
+  await until('return !!window.__speedCtl');
+  await run('document.getElementById("play").click();');
+  const welcomePill = await until('const i = window.__speedCtl && window.__speedCtl.inspect(); return !!i && i.shown && i.minimized && !document.getElementById("sample").paused');
+  check(!!welcomePill, 'on the welcome page, playing the sample shows the pill');
+  await run('document.activeElement && document.activeElement.blur && document.activeElement.blur();');
+  await driver.actions().sendKeys(']').perform();
+  const welcomeRate = await until('const r = document.getElementById("sample").playbackRate; const f = document.querySelector("speed-ctl").shadowRoot.querySelector(".flash"); return Math.abs(r - 1.1) < 0.005 && !f.hidden && f.textContent');
+  check(welcomeRate === '1.10×', '] speeds the sample up to 1.1× and flashes it', welcomeRate);
+  const welcomeKeys = await run(
+    'return (window.wrappedJSObject || window).browser.storage.local.get(null).then((all) => Object.keys(all).filter((k) => k.includes("moz-extension")).join(" "));'
+  );
+  check(welcomeKeys === '', 'nothing is saved for the welcome page', welcomeKeys);
+  await driver.close();
+  await driver.switchTo().window(pageTab);
 } catch (err) {
   check(false, 'the run stopped', err.message.split('\n')[0]);
 } finally {

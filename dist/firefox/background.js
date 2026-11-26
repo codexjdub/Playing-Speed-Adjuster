@@ -199,6 +199,22 @@ const handlers = {
     await browser.action.setBadgeText({ tabId: sender.tab.id, text: '' });
   },
 
+  // Time saved by playing faster than 1×, added to today's total (by the computer's clock). Kept for about a
+  // year of days with any; private windows save nothing.
+  async saved(message, sender) {
+    const seconds = Math.round(Number(message.seconds));
+    if (sender.tab.incognito || !(seconds >= 1 && seconds <= 3600)) return;
+    const now = new Date();
+    const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((n) => String(n).padStart(2, '0')).join('-');
+    await serially(async () => {
+      const { stats } = await browser.storage.local.get('stats');
+      const days = { ...(stats && stats.days) };
+      days[day] = (Number(days[day]) || 0) + seconds;
+      const kept = Object.keys(days).sort().slice(-400);
+      await browser.storage.local.set({ stats: { days: Object.fromEntries(kept.map((key) => [key, days[key]])) } });
+    });
+  },
+
   async badge(message, sender) {
     if (sender.frameId !== 0 || !isRate(message.rate)) return;
     await browser.action.setBadgeText({ tabId: sender.tab.id, text: String(message.rate) });
@@ -263,3 +279,9 @@ browser.action.onClicked.addListener((tab) => {
 
 browser.action.setBadgeBackgroundColor({ color: '#5ea8ff' });
 browser.action.setBadgeTextColor({ color: '#0b1b2e' });
+
+// A welcome page with a sample to try PSA on, once, when it is installed (not on updates, and not for a
+// temporary install while testing).
+browser.runtime.onInstalled.addListener(({ reason, temporary }) => {
+  if (reason === 'install' && !temporary) browser.tabs.create({ url: 'welcome.html' }).catch(() => {});
+});

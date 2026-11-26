@@ -254,6 +254,7 @@ browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   // "Turn off PSA" in a tab, or "Turn back on" in the popup, shows up here at once.
   if (changes.options) load();
+  if (changes.stats) showSaved(changes.stats.newValue);
   const keys = Object.keys(changes).filter(isSiteKey);
   keys.forEach((key) => {
     if (changes[key].newValue === undefined) delete entries[key];
@@ -261,6 +262,31 @@ browser.storage.onChanged.addListener((changes, area) => {
   });
   if (keys.length) showSites();
 });
+// ---- Time saved ----
+const WEEK_HEIGHT = 44;
+function showSaved(stats) {
+  const { thisMonth, total, week } = savedTime(stats);
+  field('monthSaved').textContent = formatSaved(thisMonth);
+  field('savedNote').textContent = total
+    ? 'In all: ' + formatSaved(total) + ', by playing faster than 1×'
+    : 'Play something faster than 1× and the time you save adds up here.';
+  const most = Math.max(...week.map((day) => day.seconds), 60);
+  const bars = week.map(({ date, seconds }, index) => {
+    const column = make('div');
+    const bar = make('i', index === week.length - 1 ? 'today' : null);
+    bar.style.height = Math.max(3, Math.round((seconds / most) * WEEK_HEIGHT)) + 'px';
+    column.append(bar, make('small', null, date.toLocaleDateString(undefined, { weekday: 'narrow' })));
+    column.title = date.toLocaleDateString(undefined, { weekday: 'long' }) + ': ' + formatSaved(seconds);
+    return column;
+  });
+  field('week').replaceChildren(...bars);
+  field('week').setAttribute(
+    'aria-label',
+    'Last 7 days: ' + week.map(({ date, seconds }) => date.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + formatSaved(seconds)).join(', ')
+  );
+}
+browser.storage.local.get('stats').then(({ stats }) => showSaved(stats));
+
 field('version').textContent = 'Version ' + browser.runtime.getManifest().version;
 load();
 loadSites();

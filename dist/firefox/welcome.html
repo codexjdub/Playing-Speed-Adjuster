@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome to PSA</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="theme.css">
+<style>
+  body { padding: 56px 16px 64px; }
+  main { max-width: 760px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 36px; }
+  header img { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 0 0 1px var(--line), 0 12px 30px rgba(0, 0, 0, 0.18); }
+  h1 { margin: 18px 0 6px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); font-size: 16px; }
+  .card { background: var(--card); border-radius: 18px; box-shadow: 0 0 0 1px var(--line); }
+  .try { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; padding: 24px; }
+  .player video { display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 12px; background: #1d3b5c; object-fit: cover; cursor: pointer; }
+  .controls { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  #play { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  #play svg { width: 18px; height: 18px; fill: currentColor; }
+  .controls b { display: block; font-weight: 600; }
+  .controls span { display: block; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+  ol li { position: relative; padding: 0 0 14px 38px; counter-increment: step; color: var(--muted); }
+  ol li::before { content: counter(step); position: absolute; left: 0; top: -1px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--fill); color: var(--fg); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  ol li b { color: var(--fg); font-weight: 600; }
+  kbd { display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 6px; background: var(--fill); box-shadow: inset 0 -1px 0 var(--line);
+    color: var(--fg); font: 600 12px/22px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+  .tips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+  .tip { padding: 18px; }
+  .tip b { display: block; margin-bottom: 4px; font-weight: 600; }
+  .tip span { color: var(--muted); font-size: 13px; }
+  footer { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 32px; color: var(--muted); font-size: 13px; flex-wrap: wrap; }
+  @media (max-width: 680px) { .try, .tips { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 28px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="">
+    <h1>PSA is ready</h1>
+    <p>Playing Speed Adjuster now works on every page with audio or video. Try it here first.</p>
+  </header>
+
+  <section class="card try" aria-labelledby="try-title">
+    <div class="player">
+      <video id="sample" playsinline aria-label="A little tune to try PSA on"></video>
+      <div class="controls">
+        <button id="play" class="primary" type="button" aria-label="Play">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M4.5 2.3v11.4c0 .6.6.9 1.1.6l8.6-5.7c.4-.3.4-.9 0-1.2L5.6 1.7c-.5-.3-1.1 0-1.1.6z"/></svg>
+        </button>
+        <div><b>A little tune to try PSA on</b><span id="status">Press play</span></div>
+      </div>
+    </div>
+    <div>
+      <h2 id="try-title">Try it</h2>
+      <ol>
+        <li><b>Press play.</b> A small pill with the speed appears in the corner.</li>
+        <li><b>Press <kbd>]</kbd> to go faster</b>, <kbd>[</kbd> to go slower, or <kbd>\</kbd> for 1.5×.</li>
+        <li><b>Hover the pill</b> for − and +, or scroll on it.</li>
+        <li><b>Click the blue dot</b> to open the full panel.</li>
+      </ol>
+    </div>
+  </section>
+
+  <div class="tips">
+    <div class="card tip"><b>Every site remembers</b><span>Set a speed once and the site keeps it for next time.</span></div>
+    <div class="card tip"><b>YouTube channels</b><span>Turn on "Just this channel" to give one channel a speed of its own.</span></div>
+    <div class="card tip"><b>The toolbar button</b><span>Opens the panel on any page, or explains why PSA is off there.</span></div>
+  </div>
+
+  <footer>
+    <button id="settings" type="button">Open settings</button>
+    <span>Nothing you do on this page is saved.</span>
+  </footer>
+</main>
+<script src="welcome.js"></script>
+<script src="psa.js"></script>
+</body>
+</html>

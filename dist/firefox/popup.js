@@ -27,6 +27,15 @@ field('settings').addEventListener('click', () => {
   window.close();
 });
 
+// This month's time saved, once there is some.
+browser.storage.local.get('stats').then(({ stats }) => {
+  const { thisMonth } = savedTime(stats);
+  if (thisMonth < 60) return;
+  const line = field('saved');
+  line.append('PSA saved you ', Object.assign(document.createElement('b'), { textContent: formatSaved(thisMonth) }), ' this month');
+  line.hidden = false;
+});
+
 async function reload(tabId) {
   await browser.tabs.reload(tabId);
   window.close();
