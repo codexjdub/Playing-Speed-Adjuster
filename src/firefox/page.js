@@ -54,6 +54,7 @@ if (parentIsSameSite) {
     started = true;
     startPsa({
       top: message.top === true,
+      news: typeof message.news === 'string' ? message.news.slice(0, 20) : '',
       fresh: message.fresh === true,
       settings: message.settings || {},
       positions: message.positions || {},

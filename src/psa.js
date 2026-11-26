@@ -33,7 +33,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.12.0';
+  const VERSION = '1.13.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -1204,6 +1204,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 }
 .off:hover, .off:active { background: transparent; color: rgba(245, 245, 247, 0.85); }
 :host(.flash-only) .panel, :host(.flash-only) .pill { display: none !important; }
+.new {
+  height: 18px; margin-left: 2px; padding: 0 7px; border-radius: 999px; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.02em; background: #5ea8ff; color: #0b1b2e;
+}
+.new:hover, .new:active { background: #7db9ff; }
 `
     : '';
 
@@ -1299,6 +1304,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   // "PSA" and the blue dot, as on the icon and the pill.
   const brand = make('span', 'brand', 'PSA');
   brand.append(make('span', 'brand-dot'), make('span', 'version', VERSION));
+  // The extension, after an update with something to tell: a "New" tag that opens what's new.
+  if (ext && ext.news) {
+    const news = button('new', 'New', null, () => {
+      ext.send({ type: 'news' });
+      news.remove();
+    });
+    news.title = "What's new in PSA " + ext.news;
+    brand.append(news);
+  }
   ui.bar.append(
     makeIcon(GRIP_PATH, 'grip').svg,
     brand,

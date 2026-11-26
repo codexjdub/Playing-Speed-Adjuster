@@ -84,10 +84,13 @@ const handlers = {
     if (!site || isExcluded(options.excluded, sender.tab.url)) return { excluded: true };
     const top = sender.frameId === 0;
     if (top) usePopup(sender.tab.id, false);
-    const stored = await browser.storage.local.get(['site:' + site, 'resume:' + site]);
+    const stored = await browser.storage.local.get(['site:' + site, 'resume:' + site, 'news']);
     const siteValues = stored['site:' + site];
+    const news = stored.news;
     return {
       top,
+      // After an update with something to tell, the page's panel shows a "New" tag for a while.
+      news: top && news && news.until > Date.now() && typeof news.version === 'string' ? news.version : undefined,
       fresh: !siteValues,
       settings: {
         defaultRate: options.defaultRate,
@@ -215,6 +218,13 @@ const handlers = {
     });
   },
 
+  // The panel's "New" tag: what's new opens in a tab of its own, and the tag is done with.
+  async news(message, sender) {
+    if (sender.frameId !== 0) return;
+    await browser.storage.local.remove('news');
+    await browser.tabs.create({ url: 'welcome.html?new', index: sender.tab.index + 1 });
+  },
+
   async badge(message, sender) {
     if (sender.frameId !== 0 || !isRate(message.rate)) return;
     await browser.action.setBadgeText({ tabId: sender.tab.id, text: String(message.rate) });
@@ -280,8 +290,14 @@ browser.action.onClicked.addListener((tab) => {
 browser.action.setBadgeBackgroundColor({ color: '#5ea8ff' });
 browser.action.setBadgeTextColor({ color: '#0b1b2e' });
 
-// A welcome page with a sample to try PSA on, once, when it is installed (not on updates, and not for a
-// temporary install while testing).
+// A welcome page with a sample to try PSA on, once, when it is installed (not for a temporary install while
+// testing). An update to a version with news (news.js) only notes it: the panel offers it with a "New" tag
+// for two weeks, and nothing opens unasked.
+const NEWS_DAYS = 14;
 browser.runtime.onInstalled.addListener(({ reason, temporary }) => {
+  const version = browser.runtime.getManifest().version;
   if (reason === 'install' && !temporary) browser.tabs.create({ url: 'welcome.html' }).catch(() => {});
+  if (reason === 'update' && NEWS[version]) {
+    browser.storage.local.set({ news: { version, until: Date.now() + NEWS_DAYS * 24 * 60 * 60 * 1000 } });
+  }
 });

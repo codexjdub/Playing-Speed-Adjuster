@@ -93,6 +93,7 @@ writeFileSync(
   'popup.html',
   'theme.css',
   'saved-time.js',
+  'news.js',
   'welcome.html',
   'welcome.js',
   'popup.js',

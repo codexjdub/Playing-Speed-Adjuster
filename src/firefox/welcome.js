@@ -94,4 +94,22 @@
   sample.addEventListener('click', toggle);
   ['play', 'pause', 'ratechange', 'timeupdate'].forEach((type) => sample.addEventListener(type, show));
   field('settings').addEventListener('click', () => browser.runtime.openOptionsPage());
+
+  // welcome.html?new, from the panel's "New" tag after an update: this version's news above the sample.
+  const version = browser.runtime.getManifest().version;
+  if (new URLSearchParams(location.search).has('new') && NEWS[version]) {
+    document.title = "What's new in PSA " + version;
+    document.querySelector('h1').textContent = "What's new in PSA " + version;
+    document.querySelector('header p').textContent = 'PSA updated itself. Here is what changed, with the tune below to try it on.';
+    field('newsList').replaceChildren(
+      ...NEWS[version].map(([title, text]) => {
+        const item = document.createElement('li');
+        const name = document.createElement('b');
+        name.textContent = title;
+        item.append(name, text);
+        return item;
+      })
+    );
+    field('news').hidden = false;
+  }
 })();

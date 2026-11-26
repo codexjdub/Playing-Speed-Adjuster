@@ -352,8 +352,32 @@ try {
     'return (window.wrappedJSObject || window).browser.storage.local.get(null).then((all) => Object.keys(all).filter((k) => k.includes("moz-extension")).join(" "));'
   );
   check(welcomeKeys === '', 'nothing is saved for the welcome page', welcomeKeys);
+  // After an update with news, as onInstalled notes it: the panel shows a "New" tag that opens what's new.
+  await run(`return (window.wrappedJSObject || window).browser.storage.local.set({ news: { version: "${version}", until: Date.now() + 60000 } });`);
   await driver.close();
   await driver.switchTo().window(pageTab);
+  await driver.navigate().refresh();
+  await until('return !!window.__speedCtl');
+  await run('window.__speedCtl.togglePanel();');
+  const newTag = await until('const b = document.querySelector("speed-ctl").shadowRoot.querySelector(".brand .new"); return b && b.offsetWidth > 0 && b.textContent');
+  check(newTag === 'New', 'after an update with news, the panel shows a "New" tag', newTag);
+  const beforeNews = await driver.getAllWindowHandles();
+  await run('document.querySelector("speed-ctl").shadowRoot.querySelector(".brand .new").click();');
+  let newsTab = null;
+  for (const end = Date.now() + 8000; !newsTab && Date.now() < end; await wait(200)) {
+    newsTab = (await driver.getAllWindowHandles()).find((h) => !beforeNews.includes(h));
+  }
+  check(!!newsTab && !!(await run('return !document.querySelector("speed-ctl").shadowRoot.querySelector(".new")')),
+    'clicking it opens a tab, and the tag goes away');
+  if (newsTab) {
+    await driver.switchTo().window(newsTab);
+    const newsText = await until('const n = document.getElementById("news"); return n && !n.hidden && document.querySelector("h1").textContent + " / " + n.querySelectorAll("li").length');
+    check(newsText === "What's new in PSA " + version + ' / 4', "the tab shows what's new in this version", newsText);
+    const cleared = await run('return (window.wrappedJSObject || window).browser.storage.local.get("news").then((o) => !o.news);');
+    check(cleared === true, 'the news is cleared once seen', cleared);
+    await driver.close();
+    await driver.switchTo().window(pageTab);
+  }
 } catch (err) {
   check(false, 'the run stopped', err.message.split('\n')[0]);
 } finally {
