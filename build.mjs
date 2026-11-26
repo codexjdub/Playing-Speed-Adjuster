@@ -91,6 +91,7 @@ writeFileSync(
   'options.html',
   'options.js',
   'popup.html',
+  'theme.css',
   'popup.js',
   'icon.svg',
   'icon-light.svg',

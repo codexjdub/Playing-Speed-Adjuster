@@ -38,7 +38,7 @@
   // ---- Settings ---------------------------------------------------------------------------------
 
   // Shown in the panel and on the install page (build.mjs reads it from here). Bump it on every release.
-  const VERSION = '1.10.0';
+  const VERSION = '1.11.0';
   const MIN_RATE = 0.25;
   const MAX_RATE = 4;
   const STEP = 0.05;
@@ -981,15 +981,18 @@
 :host { all: initial; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-.panel, .pill { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+.panel, .pill {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased; -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+}
 .panel {
-  width: 272px; max-width: calc(100vw - 16px); padding: 4px 10px 10px; font-size: 13px; line-height: 1.35;
-  color: #f5f5f7; background: rgba(28, 28, 30, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  width: 276px; max-width: calc(100vw - 16px); padding: 4px 12px 12px; font-size: 13px; line-height: 1.35;
+  color: #f5f5f7; background: rgba(30, 30, 33, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.5), 0 16px 40px rgba(0, 0, 0, 0.38);
   -webkit-user-select: none; user-select: none; text-align: left; direction: ltr;
 }
-.bar { display: flex; align-items: center; gap: 6px; height: 30px; cursor: grab; touch-action: none; }
+.bar { display: flex; align-items: center; gap: 6px; height: 32px; cursor: grab; touch-action: none; }
 .bar:active { cursor: grabbing; }
 .grip { width: 12px; height: 12px; fill: currentColor; opacity: 0.4; flex: none; }
 .brand {
@@ -1001,8 +1004,8 @@
 .nav { display: flex; align-items: center; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .count { min-width: 30px; text-align: center; opacity: 0.8; }
 button {
-  font: inherit; color: inherit; margin: 0; border: 0; border-radius: 7px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.09);
+  font: inherit; color: inherit; margin: 0; border: 0; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.09); transition: background-color 0.12s;
 }
 button:hover { background: rgba(255, 255, 255, 0.17); }
 button:active { background: rgba(255, 255, 255, 0.25); }
@@ -1067,7 +1070,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .pill {
   position: relative; display: inline-flex; align-items: center; gap: 2px; padding: 4px 5px 4px 11px;
   border-radius: 999px; font-size: 13px; font-weight: 600; line-height: 1.2;
-  color: #f5f5f7; background: rgba(28, 28, 30, 0.96); border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #f5f5f7; background: rgba(30, 30, 33, 0.88); border: 1px solid rgba(255, 255, 255, 0.24);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 6px 22px rgba(0, 0, 0, 0.45); cursor: grab; touch-action: none;
   -webkit-user-select: none; user-select: none; white-space: nowrap;
 }
@@ -1085,7 +1088,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
 .pill-rate svg { width: 10px; height: 10px; fill: currentColor; opacity: 0.7; }
 .pill-menu {
   position: absolute; top: calc(100% + 6px); right: 0; display: flex; flex-direction: column; min-width: 96px;
-  padding: 4px; border-radius: 10px; background: rgba(28, 28, 30, 0.98);
+  padding: 4px; border-radius: 10px; background: rgba(30, 30, 33, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 .pill-menu.up { top: auto; bottom: calc(100% + 6px); }
@@ -1122,11 +1125,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid #5ea8ff; outline-
   const EXT_CSS = ext
     ? `
 .off {
-  display: block; width: 100%; margin-top: 8px; padding: 6px 2px 0; border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0; background: transparent; font-size: 11px; text-align: left; opacity: 0.55;
+  display: block; width: 100%; margin-top: 10px; padding: 8px 2px 0; border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0; background: transparent; font-size: 11px; text-align: center; color: rgba(245, 245, 247, 0.45);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.off:hover, .off:active { background: transparent; opacity: 0.9; }
+.off:hover, .off:active { background: transparent; color: rgba(245, 245, 247, 0.85); }
 `
     : '';
 

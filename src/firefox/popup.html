@@ -3,26 +3,27 @@
 <head>
 <meta charset="utf-8">
 <title>PSA</title>
+<link rel="stylesheet" href="theme.css">
 <style>
-  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1d1d1f; --muted: #5d6066; --line: #e2e2dc; --accent: #1a66d2; --on-accent: #ffffff; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #1c1c1f; --fg: #f2f2f2; --muted: #a3a3aa; --line: #34343a; --accent: #5ea8ff; --on-accent: #08182c; }
-  }
-  body { margin: 0; width: 290px; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { width: 300px; background: var(--card); }
   main { padding: 14px 16px 16px; }
-  .brand { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
-  .brand i { width: 7px; height: 7px; border-radius: 50%; background: #5ea8ff; }
-  h1 { margin: 0 0 4px; font-size: 15px; overflow-wrap: anywhere; }
-  p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
-  button { font: inherit; font-weight: 600; padding: 6px 14px; border-radius: 7px; border: 0; background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  .top { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+  .top img { width: 20px; height: 20px; border-radius: 5px; box-shadow: 0 0 0 1px var(--line); }
+  .top span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .actions { display: flex; gap: 8px; }
 </style>
 </head>
 <body>
   <main id="box" hidden>
-    <div class="brand">PSA<i></i></div>
+    <div class="top"><img src="icon.svg" alt=""><span id="site">Playing Speed Adjuster</span></div>
     <h1 id="title"></h1>
     <p id="text"></p>
-    <button id="act" type="button"></button>
+    <div class="actions">
+      <button id="act" class="primary" type="button"></button>
+      <button id="settings" type="button">Settings</button>
+    </div>
   </main>
   <script src="popup.js"></script>
 </body>

@@ -34,7 +34,7 @@
       "description": "Show or hide the PSA panel"
     }
   },
-  "options_ui": { "page": "options.html" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

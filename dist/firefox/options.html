@@ -4,86 +4,136 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PSA settings</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="theme.css">
 <style>
-  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1d1d1f; --muted: #5d6066; --line: #e2e2dc; --accent: #1a66d2; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #1c1c1f; --fg: #f2f2f2; --muted: #a3a3aa; --line: #34343a; --accent: #5ea8ff; }
-  }
-  body { margin: 0; padding: 16px 16px 24px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 560px; }
-  header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 4px; }
-  header h1 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 18px; }
-  header h1 i { width: 8px; height: 8px; border-radius: 50%; background: #5ea8ff; }
-  #version { color: var(--muted); font-size: 13px; }
-  .intro { margin: 0 0 20px; color: var(--muted); }
-  a { color: var(--accent); }
-  section { padding: 16px 0 4px; border-top: 1px solid var(--line); }
-  h2 { margin: 0 0 10px; font-size: 15px; }
-  section label.title { font-weight: 400; }
-  fieldset { border: 0; padding: 0; margin: 0 0 14px; }
-  label.check + label.check { margin-top: 6px; }
-  legend, .title { font-weight: 600; display: block; margin: 0 0 4px; font-size: inherit; }
-  .hint { color: var(--muted); margin: 2px 0 0; font-size: 13px; }
-  input[type="number"] { width: 6em; }
-  input, textarea, button { font: inherit; }
-  textarea { width: 100%; max-width: 460px; height: 5.5em; box-sizing: border-box; }
-  label.check { display: flex; gap: 8px; align-items: baseline; }
-  button { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
-  #status { color: var(--muted); margin-left: 8px; }
-  .sites { list-style: none; margin: 8px 0 12px; padding: 0; max-width: 460px; }
-  .sites li { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
-  .sites li:last-child { border-bottom: 1px solid var(--line); }
-  .sites .site { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .sites .detail { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .sites button { padding: 3px 10px; font-size: 13px; }
-  .sites .empty { color: var(--muted); }
-  .sites li.channel { padding-left: 18px; }
-  .sites li.channel .site { font-weight: 400; }
+  body { padding: 40px 16px 56px; }
+  main { max-width: 600px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin: 0 4px 28px; }
+  header img { width: 40px; height: 40px; border-radius: 10px; box-shadow: 0 0 0 1px var(--line); }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  header p { margin: 1px 0 0; color: var(--muted); font-size: 13px; }
+  header a { margin-left: auto; font-size: 13px; }
+  h2 { margin: 26px 16px 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .card { margin: 0; padding: 0; border: 0; background: var(--card); border-radius: var(--radius-lg); box-shadow: 0 0 0 1px var(--line); }
+  .row { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 10px 16px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .label { flex: 1; min-width: 0; }
+  .label b { display: block; font-weight: 500; }
+  .label span { display: block; color: var(--muted); font-size: 13px; }
+  .hint { margin: 8px 16px 0; color: var(--muted); font-size: 12px; }
+
+  /* The speed stepper: − [1.25]× + */
+  .stepper { display: flex; align-items: center; flex: none; border-radius: var(--radius); background: var(--fill); }
+  .stepper button { width: 34px; height: 32px; padding: 0; border: 0; background: transparent; color: var(--fg); font-size: 18px; border-radius: var(--radius); }
+  .stepper button:hover { background: var(--fill); }
+  .stepper label { display: flex; align-items: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stepper input { width: 3.2em; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; -moz-appearance: textfield; }
+  .stepper input::-webkit-inner-spin-button { display: none; }
+  .stepper input:focus-visible { outline: none; }
+  .stepper:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* Switches: checkboxes drawn as switches, with the same keyboard and screen-reader behavior. */
+  .switch { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 40px; height: 24px; margin: 0;
+    border-radius: 12px; background: var(--switch-off); cursor: pointer; transition: background-color 0.15s; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); transition: transform 0.15s; }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { transform: translateX(16px); }
+  .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  label.row { cursor: pointer; }
+
+  /* Sites to skip, as chips. */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 16px; }
+  .chip { display: inline-flex; align-items: center; gap: 2px; height: 30px; padding: 0 4px 0 12px; border-radius: 15px; background: var(--fill); font-size: 13px; max-width: 100%; }
+  .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip button { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 15px; line-height: 1; }
+  .chip button:hover { background: var(--fill); color: var(--fg); }
+  .add { display: flex; gap: 8px; padding: 0 16px 14px; }
+  .add input { flex: 1; min-width: 0; height: 34px; padding: 0 12px; border: 0; border-radius: var(--radius); background: var(--fill); color: var(--fg); font: inherit; }
+  .add input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+  .none { color: var(--muted); font-size: 13px; line-height: 30px; }
+
+  /* Saved sites. */
+  .sites { list-style: none; margin: 0; padding: 0; }
+  .sites li { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px 8px 16px; }
+  .sites li + li { border-top: 1px solid var(--line); }
+  .avatar { flex: none; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px;
+    background: var(--fill); color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; }
+  .sites .label b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sites .label span { font-variant-numeric: tabular-nums; }
+  .sites li.channel { padding-left: 56px; }
+  .sites li.channel .label b { font-weight: 400; }
+  .ghost { flex: none; height: 30px; padding: 0 12px; background: transparent; color: var(--muted); font-size: 13px; box-shadow: inset 0 0 0 1px var(--line); }
+  .ghost:hover { background: var(--fill); color: var(--fg); filter: none; }
+  .sites .empty { justify-content: center; color: var(--muted); font-size: 13px; }
+  .danger { display: block; margin: 14px auto 0; border: 0; background: transparent; color: var(--danger); font-size: 13px; }
+  .danger:hover { background: var(--fill); }
+
+  #status { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 12px); padding: 8px 16px; border-radius: 18px;
+    background: var(--toast); color: var(--toast-fg); font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; }
+  #status.shown { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) { #status, .switch, .switch::after { transition: none; } }
+  @media (max-width: 480px) { body { padding-top: 24px; } header a { display: none; } }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>PSA<i></i></h1>
-    <span id="version"></span>
+    <img src="icon.svg" alt="">
+    <div>
+      <h1>Playing Speed Adjuster</h1>
+      <p><span id="version"></span> · Changes are saved as you make them</p>
+    </div>
+    <a href="https://codexjdub.github.io/Playing-Speed-Adjuster/" target="_blank" rel="noopener">About PSA</a>
   </header>
-  <p class="intro">Playing Speed Adjuster speeds up the audio and video on any page. Changes here are saved as you make them. <a href="https://codexjdub.github.io/Playing-Speed-Adjuster/" target="_blank" rel="noopener">About PSA</a></p>
+
   <form id="options">
-    <section aria-labelledby="speed-title">
-      <h2 id="speed-title">Speed</h2>
-      <fieldset>
-        <label class="title" for="defaultRate">Speed on sites without one of their own</label>
-        <input id="defaultRate" type="number" min="0.25" max="4" step="0.05" required>
-        <p class="hint">Each site remembers the speed you set there; this one is for the rest.</p>
-      </fieldset>
-    </section>
-    <section aria-labelledby="pill-title">
-      <h2 id="pill-title">Pill and keys</h2>
-      <fieldset>
-        <label class="check"><input id="autoShow" type="checkbox"> Show the small speed pill when something starts playing with sound</label>
-        <label class="check"><input id="shortcuts" type="checkbox"> Keyboard shortcuts on pages with audio or video: [ slower, ] faster, \ 1.5× or back to 1×</label>
-      </fieldset>
-    </section>
-    <section aria-labelledby="skip-title">
-      <h2 id="skip-title">Sites to skip</h2>
-      <fieldset>
-        <label class="title" for="excluded">PSA stays off on these sites</label>
-        <textarea id="excluded" spellcheck="false" placeholder="meet.google.com"></textarea>
-        <p class="hint">One per line, as a name like the one above or a page's address. A site includes its subdomains. "Turn off PSA on …" at the bottom of the panel adds one. Reload a page for a change to apply there.</p>
-      </fieldset>
-    </section>
+    <h2 id="speed-title">Speed</h2>
+    <fieldset class="card" aria-labelledby="speed-title">
+      <div class="row">
+        <div class="label"><b id="rate-title">Default speed</b><span>For sites that don't have a speed of their own yet</span></div>
+        <div class="stepper">
+          <button id="slower" type="button" aria-label="Slower">−</button>
+          <label><input id="defaultRate" type="number" min="0.25" max="4" step="0.05" required aria-labelledby="rate-title">×</label>
+          <button id="faster" type="button" aria-label="Faster">+</button>
+        </div>
+      </div>
+    </fieldset>
+    <p class="hint">Each site remembers the speed you set there.</p>
+
+    <h2 id="pill-title">Pill and keys</h2>
+    <fieldset class="card" aria-labelledby="pill-title">
+      <label class="row">
+        <span class="label"><b>Show the pill</b><span>When something starts playing with sound</span></span>
+        <input id="autoShow" class="switch" type="checkbox">
+      </label>
+      <label class="row">
+        <span class="label"><b>Keyboard shortcuts</b><span>[ slower · ] faster · \ 1.5× or back to 1×</span></span>
+        <input id="shortcuts" class="switch" type="checkbox">
+      </label>
+    </fieldset>
+
+    <h2 id="skip-title">Sites to skip</h2>
+    <div class="card" role="group" aria-labelledby="skip-title">
+      <div id="chips" class="chips"></div>
+      <div class="add">
+        <input id="newSite" type="text" spellcheck="false" autocomplete="off" placeholder="Add a site, like example.com" aria-label="Site to skip">
+        <button id="addSite" type="button">Add</button>
+      </div>
+    </div>
+    <p class="hint">PSA stays off on these sites and their subdomains. "Turn off PSA on …" in the panel adds one. Reload a page for a change to apply there.</p>
   </form>
-  <section aria-labelledby="saved-title">
-    <h2 id="saved-title">Saved sites</h2>
-    <p class="hint">Each site's speed and the places saved in its recordings, with any YouTube channels that keep a speed of their own under the site. A tab that is already open keeps them until it is reloaded.</p>
-    <ul id="sites" class="sites"></ul>
-    <p>
-      <button id="forget" type="button">Forget saved speeds and places</button>
-      <span id="status" role="status"></span>
-    </p>
-  </section>
+
+  <h2 id="saved-title">Saved sites</h2>
+  <div class="card">
+    <ul id="sites" class="sites" aria-labelledby="saved-title"></ul>
+  </div>
+  <p class="hint">Each site's speed and the places saved in its recordings, with YouTube channels that keep a speed of their own. An open tab keeps them until it is reloaded.</p>
+  <button id="forget" class="danger" type="button">Forget all saved speeds and places</button>
 </main>
-  <script src="defaults.js"></script>
-  <script src="options.js"></script>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="defaults.js"></script>
+<script src="options.js"></script>
 </body>
 </html>

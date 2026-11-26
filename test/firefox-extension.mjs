@@ -277,19 +277,34 @@ try {
     await run('return [!!window.__speedCtl, document.getElementById("episode").playbackRate].join(" ")'));
   check(!!(await inFrame('return !window.__speedCtl')), 'it stops in the embedded player too');
 
+  // The settings page shows the site among the sites to skip, as a chip. A whole address typed in is kept as
+  // its site, without www., and × takes a chip away.
+  await openExtensionTab('options.html');
+  const chipText = 'return [...document.querySelectorAll("#chips .chip span")].map((c) => c.textContent).join(" ")';
+  const chips = await until(chipText + ' || null');
+  check(chips === '127.0.0.1', 'the settings page lists the site among the sites to skip', chips);
+  await run('const i = document.getElementById("newSite"); i.value = "https://www.example.org/watch?v=1"; i.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));');
+  const typed = await until(chipText + ' === "127.0.0.1 example.org" && (window.wrappedJSObject || window).browser.storage.local.get("options").then((o) => o.options.excluded === "127.0.0.1\\nexample.org" && o.options.excluded)');
+  check(typed === '127.0.0.1\nexample.org', 'a typed address is added as its site', JSON.stringify(typed));
+  await run('[...document.querySelectorAll("#chips .chip")].find((c) => c.textContent.includes("example.org")).querySelector("button").click();');
+  const removed = await until(chipText + ' === "127.0.0.1"');
+  check(!!removed, '× takes a site off the list');
+  await driver.close();
+  await driver.switchTo().window(pageTab);
+
   // The toolbar popup, opened in a tab of its own: there, the active tab is its own, which add-ons can't reach.
   const popupText = 'const b = document.getElementById("box"); return !b.hidden && document.getElementById("title").textContent';
   await openExtensionTab('popup.html');
   const blocked = await until(popupText);
-  check(blocked === "PSA can't run on this page", "the popup on a page add-ons can't reach says so", blocked);
+  check(blocked === "PSA can't run here", "the popup on a page add-ons can't reach says so", blocked);
   const pageTabId = await run(
     'const w = window.wrappedJSObject || window; const b = w.browser || (typeof browser !== "undefined" ? browser : null); return b.tabs.query({}).then((tabs) => tabs.find((t) => t.url.startsWith("http://127.0.0.1")).id);'
   );
   await run(`location.href = "popup.html?tab=${pageTabId}";`);
-  const excludedText = await until(popupText + ' === "PSA is off on 127.0.0.1" && document.getElementById("act").textContent');
-  check(excludedText === 'Turn back on', 'the popup for the page says "PSA is off on 127.0.0.1" and offers "Turn back on"', excludedText);
+  const excludedText = await until(popupText + ' === "PSA is off here" && document.getElementById("site").textContent + " / " + document.getElementById("act").textContent');
+  check(excludedText === '127.0.0.1 / Turn back on', 'the popup for the page says PSA is off on 127.0.0.1 and offers "Turn back on"', excludedText);
   await run('document.getElementById("act").click();');
-  const backOn = await until(popupText + ' === "PSA is back on for 127.0.0.1" && document.getElementById("act").textContent');
+  const backOn = await until(popupText + ' === "PSA is back on" && document.getElementById("act").textContent');
   check(backOn === 'Reload', '"Turn back on" takes the site off the list and offers a reload', backOn);
   await run(`location.href = "popup.html?tab=${pageTabId}&again";`);
   const needsReload = await until(popupText);
