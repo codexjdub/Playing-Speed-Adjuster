@@ -14,7 +14,7 @@
 <meta property="og:image" content="https://codexjdub.github.io/Playing-Speed-Adjuster/docs/social.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The PSA panel at 1.50× speed, and the small pill it shrinks to.">
+<meta property="og:image:alt" content="The PSA panel at 1.50× on a YouTube video with “Just this channel” on, and the small pill it shrinks to.">
 <meta name="twitter:card" content="summary_large_image">
 <script>
   // Firefox gets the extension first. On phones and tablets, where nothing can be dragged to a bookmarks bar,
@@ -45,7 +45,8 @@
   .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
 
   .top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
-  .logo { font-weight: 700; letter-spacing: 0.04em; color: var(--text); text-decoration: none; }
+  .logo { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: 0.04em; color: var(--text); text-decoration: none; }
+  .logo i { width: 8px; height: 8px; border-radius: 50%; background: #5ea8ff; }
   .top nav { display: flex; gap: 20px; font-size: 15px; }
   .top nav a { color: var(--muted); text-decoration: none; }
   .top nav a:hover { color: var(--text); }
@@ -108,6 +109,10 @@
   .mock-presets { display: flex; gap: 4px; }
   .mock-presets span { flex: 1; height: 26px; border-radius: 8px; background: rgba(255, 255, 255, 0.09); display: grid; place-items: center; font-size: 12px; }
   .mock-presets .on { background: #5ea8ff; color: #0b1b2e; font-weight: 600; }
+  .mock-channel { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 7px 2px 0; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 12px; }
+  .mock-switch { flex: none; position: relative; width: 28px; height: 16px; border-radius: 999px; background: #5ea8ff; }
+  .mock-switch::after { content: ""; position: absolute; top: 2px; left: 14px; width: 12px; height: 12px; border-radius: 50%; background: #f5f5f7; }
+  .mock-channel-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; }
   /* The panel shrunk to its pill, below it. */
   .mock-pill {
     width: max-content; margin: 22px 0 0 -24px; display: flex; align-items: center; gap: 2px;
@@ -189,7 +194,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="logo" href="./">PSA</a>
+    <a class="logo" href="./">PSA<i></i></a>
     <nav>
       <a href="#try">Try it</a>
       <a href="#install">Install</a>
@@ -216,8 +221,8 @@
       </div>
       <div class="mocks" aria-hidden="true">
       <div class="mock">
-        <div class="mock-bar"><svg viewBox="0 0 16 16"><path d="M4 1h3v3H4zM9 1h3v3H9zM4 6.5h3v3H4zM9 6.5h3v3H9zM4 12h3v3H4zM9 12h3v3H9z"/></svg><b>PSA<i></i><small>%VERSION%</small></b><span>‹ 1/2 ›</span><span>–</span><span>×</span></div>
-        <div class="mock-meta"><strong>Morning news, part 1</strong><small>Playing · 3:12 / 24:40 · 14:18 left</small></div>
+        <div class="mock-bar"><svg viewBox="0 0 16 16"><path d="M4 1h3v3H4zM9 1h3v3H9zM4 6.5h3v3H4zM9 6.5h3v3H9zM4 12h3v3H4zM9 12h3v3H9z"/></svg><b>PSA<i></i><small>%VERSION%</small></b><span>–</span><span>×</span></div>
+        <div class="mock-meta"><strong>How tides work, in ten minutes</strong><small>Playing · 3:12 / 10:40 · 4:58 left</small></div>
         <div class="mock-transport">
           <span class="mock-skip">−10s</span>
           <span class="mock-play"><svg viewBox="0 0 16 16"><path d="M3.5 2h3v12h-3zM9.5 2h3v12h-3z"/></svg></span>
@@ -225,6 +230,7 @@
         </div>
         <div class="mock-speed"><span>−</span><span class="mock-readout">1.50×</span><span>+</span></div>
         <div class="mock-presets"><span>1</span><span>1.25</span><span class="on">1.5</span><span>1.75</span><span>2</span><span>2.5</span><span>3</span></div>
+        <div class="mock-channel"><span class="mock-switch"></span><span>Just this channel</span><span class="mock-channel-name">Science Weekly</span></div>
       </div>
       <div class="mock-pill"><b>PSA<i></i></b><span class="mock-step">−</span><span>1.50×<svg viewBox="0 0 16 16"><path d="M3.5 6h9L8 11z"/></svg></span><span class="mock-step">+</span></div>
       </div>
