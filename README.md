@@ -2,7 +2,7 @@
 
 PSA is a bookmarklet that opens a small floating panel for the HTML5 `<audio>` and `<video>` on the current page. It works on any site; nothing in it is specific to one site.
 
-<img src="docs/panel.png" alt="The PSA panel: title and status, −10s / Play / +20s buttons, the speed readout at 1.50× with − and + buttons, and speed presets" width="320">
+<img src="docs/panel.png" alt="The PSA panel on a YouTube video: title and status, −10s / Pause / +20s buttons, the speed readout at 1.50× with − and + buttons, speed presets, and &quot;Just this channel&quot; switched on" width="320">
 
 - Speed from 0.25× to 4×: −/+ in 0.05 steps, presets (1, 1.25, 1.5, 1.75, 2, 2.5, 3), click the readout and type a value (`1.6`, `1.6x`, `160%`), or use the [keyboard shortcuts](#keyboard-shortcuts).
 - Applies the speed to **every** audio and video element on the page, including ones added later, ones inside open shadow roots and same-origin iframes, and off-page `new Audio()` players.

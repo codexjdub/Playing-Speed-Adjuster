@@ -1,4 +1,4 @@
-/* The look shared by the extension's own pages (settings and the toolbar popup), in step with PSA's panel:
+/* The look shared by the extension's own pages (settings, the toolbar popup and the welcome page), in step with PSA's panel:
    the same blue, corners and type, light or dark with the system. */
 :root {
   color-scheme: light dark;

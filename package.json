@@ -1,7 +1,7 @@
 {
   "name": "playing-speed-adjuster",
   "private": true,
-  "description": "Playing Speed Adjuster (PSA): a site-independent bookmarklet to control HTML5 audio/video playback speed",
+  "description": "Playing Speed Adjuster (PSA): a speed control for the audio and video on any web page, as a bookmarklet for any browser or an extension for Firefox",
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
